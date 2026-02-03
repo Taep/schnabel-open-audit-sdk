@@ -4,3 +4,4 @@ dist/
 *.log
 # Repomix output file ignore
 repomix-output.xml
+artifacts/

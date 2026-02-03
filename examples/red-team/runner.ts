@@ -10,6 +10,7 @@ import { HiddenAsciiTagsScanner } from "../../src/signals/scanners/sanitize/hidd
 import { Uts39SkeletonViewScanner } from "../../src/signals/scanners/enrich/uts39_skeleton_view.js";
 import { createRulePackScanner } from "../../src/signals/scanners/detect/rulepack_scanner.js";
 
+
 // Simple ANSI colors
 const c = {
   red: (s: string) => `\x1b[31m${s}\x1b[0m`,
