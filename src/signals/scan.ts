@@ -14,7 +14,10 @@ export interface ScanOptions {
   failFastRisk?: "high" | "critical";
 }
 
-function isFailFastHit(risk: Finding["risk"], threshold: NonNullable<ScanOptions["failFastRisk"]>): boolean {
+function isFailFastHit(
+  risk: Finding["risk"],
+  threshold: NonNullable<ScanOptions["failFastRisk"]>
+): boolean {
   if (threshold === "critical") return risk === "critical";
   return risk === "high" || risk === "critical";
 }
@@ -22,10 +25,13 @@ function isFailFastHit(risk: Finding["risk"], threshold: NonNullable<ScanOptions
 /**
  * scanSignals()
  * - Runs scanners sequentially (chain).
- * - Allows scanners to mutate the working input (sanitizers).
+ * - Allows scanners to mutate the working input (sanitizers/enrichers).
  * - Aggregates findings.
  * - Optionally stops early (failFast).
- * - Ensures multi-view (raw/sanitized/revealed) is initialized at chain start.
+ * - Ensures multi-view (raw/sanitized/revealed/skeleton) is initialized at chain start.
+ *
+ * Added safety:
+ * - Validates scanner objects to avoid "Cannot read properties of undefined (reading 'run')".
  */
 export async function scanSignals(
   input: NormalizedInput,
@@ -41,20 +47,37 @@ export async function scanSignals(
   const failFast = options.failFast ?? false;
   const failFastRisk = options.failFastRisk ?? "high";
 
-  // Working input that can be updated by sanitizers
+  // Working input that can be updated by sanitizers/enrichers
   let current = ensureViews(input);
 
-  for (const scanner of scanners) {
-    const out = await scanner.run(current, ctx);
+  for (let i = 0; i < scanners.length; i++) {
+    const scanner: any = scanners[i];
+
+    // Defensive validation (helps debug wrong imports/exports)
+    if (!scanner || typeof scanner.run !== "function") {
+      const name = scanner?.name ?? "(unknown)";
+      throw new Error(
+        `scanSignals: invalid scanner at index ${i}. ` +
+        `Expected object with .run(), got: ${String(scanner)} (name=${name})`
+      );
+    }
+
+    const out: any = await scanner.run(current, ctx);
+
+    if (!out || !out.input || !Array.isArray(out.findings)) {
+      throw new Error(
+        `scanSignals: scanner "${scanner.name}" returned invalid output. ` +
+        `Expected { input, findings[] }.`
+      );
+    }
 
     // Preserve views across scanners (in case a scanner forgets to carry it)
     const next = out.input.views ? out.input : { ...out.input, views: current.views };
-
     current = ensureViews(next);
 
     if (out.findings.length) findings.push(...out.findings);
 
-    if (failFast && out.findings.some(f => isFailFastHit(f.risk, failFastRisk))) {
+    if (failFast && out.findings.some((f: Finding) => isFailFastHit(f.risk, failFastRisk))) {
       break;
     }
   }

@@ -49,7 +49,7 @@ describe("Evidence markdown report dump (integration)", () => {
     expect(md).toContain("Schnabel Audit (RedTeam-style)");
     expect(md).toContain("Decision:");
     expect(md).toContain("Primary:");
-    expect(md).toContain("Badges:");
+    expect(md).toContain("Indicators:");
 
     // Optional: notes section may exist depending on options
     // expect(md).toContain("## Notes");
