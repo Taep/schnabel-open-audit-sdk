@@ -51,12 +51,21 @@ export function loadScenarios(dir: string): AttackScenario[] {
     const p = path.join(abs, f);
     const raw = fs.readFileSync(p, "utf8");
     let obj: any;
+
     try {
       obj = JSON.parse(raw);
     } catch (e: any) {
       throw new Error(`JSON parse failed: ${p}: ${String(e?.message ?? e)}`);
     }
-    scenarios.push(assertScenario(obj, p));
+
+    // ✅ NEW: allow array-of-scenarios
+    if (Array.isArray(obj)) {
+      for (const item of obj) {
+        scenarios.push(assertScenario(item, p));
+      }
+    } else {
+      scenarios.push(assertScenario(obj, p));
+    }
   }
 
   // Ensure unique ids

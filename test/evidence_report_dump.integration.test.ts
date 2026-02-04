@@ -11,7 +11,7 @@ import { Uts39SkeletonViewScanner } from "../src/signals/scanners/enrich/uts39_s
 import { createRulePackScanner } from "../src/signals/scanners/detect/rulepack_scanner.js";
 
 describe("Evidence markdown report dump (integration)", () => {
-  it("writes an EN markdown report under artifacts/ and keeps it", async () => {
+  it("writes a RedTeam-style EN markdown report under artifacts/ and keeps it", async () => {
     const outDir = "artifacts/reports_test";
     const fileName = "evidence_report_test.en.md";
     const absPath = path.resolve(outDir, fileName);
@@ -44,13 +44,14 @@ describe("Evidence markdown report dump (integration)", () => {
     expect(fs.existsSync(absPath)).toBe(true);
 
     const md = fs.readFileSync(absPath, "utf8");
-    expect(md).toContain("Schnabel Audit Report (Human-friendly)");
-    expect(md).toContain("Executive Summary");
-    expect(md).toContain("Action");
-    expect(md).toContain("Risk");
-    expect(md).toContain("Input Summary");
-    expect(md).toContain("What went wrong");
-    expect(md).toContain("Recommended next steps");
 
+    // New RedTeam-style report checks (stable anchors)
+    expect(md).toContain("Schnabel Audit (RedTeam-style)");
+    expect(md).toContain("Decision:");
+    expect(md).toContain("Primary:");
+    expect(md).toContain("Badges:");
+
+    // Optional: notes section may exist depending on options
+    // expect(md).toContain("## Notes");
   });
 });

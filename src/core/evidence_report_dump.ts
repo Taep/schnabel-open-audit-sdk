@@ -35,9 +35,10 @@ export async function saveEvidenceReportEN(
   const fileName = opts.fileName ?? `${safeRequestId}.${evidence.generatedAtMs}.report.en.md`;
 
   const md = renderEvidenceReportEN(evidence, {
-    maxPreviewChars: 140,
-    showDetails: false, // HUMAN-FRIENDLY default
-  });
+  maxPreviewChars: 120,
+  includeNotes: true,
+  includeDetails: false,
+});
 
   return saveEvidenceReportMarkdown(md, { outDir, fileName });
 }
