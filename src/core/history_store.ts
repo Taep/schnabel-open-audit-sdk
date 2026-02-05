@@ -8,7 +8,7 @@ export interface HistoryTurnV0 {
   action: VerdictAction;
   risk: RiskLevel;
 
-  // Tool outcome snapshot
+  // Tool outcome snapshot (useful for gaslighting checks)
   succeededTools: string[];
   failedTools: string[];
 
@@ -18,10 +18,6 @@ export interface HistoryTurnV0 {
   // Optional: signal digest (rule ids / categories)
   ruleIds?: string[];
   categories?: string[];
-
-  // ✅ NEW: detect scanner names / tags (for repetition escalation)
-  detectScanners?: string[];
-  detectTags?: string[];
 }
 
 export interface HistoryStore {
@@ -29,6 +25,10 @@ export interface HistoryStore {
   append(sessionId: string, turn: HistoryTurnV0): Promise<void>;
 }
 
+/**
+ * In-memory history store (good for dev/testing and app-level integration).
+ * You can replace this with Redis/DB later without changing scanner logic.
+ */
 export class InMemoryHistoryStore implements HistoryStore {
   private maxTurns: number;
   private map = new Map<string, HistoryTurnV0[]>();

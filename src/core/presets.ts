@@ -6,6 +6,8 @@ import { Uts39SkeletonViewScanner } from "../signals/scanners/enrich/uts39_skele
 import { createRulePackScanner } from "../signals/scanners/detect/rulepack_scanner.js";
 import { ToolResultContradictionScanner } from "../signals/scanners/detect/tool_result_contradiction.js";
 import { SeparatorCollapseScanner } from "../signals/scanners/sanitize/separator_collapse.js";
+import { ToolResultFactMismatchScanner } from "../signals/scanners/detect/tool_result_fact_mismatch.js";
+
 
 export interface PresetOptions {
   rulepackHotReload?: boolean;
@@ -49,6 +51,9 @@ export function createPostLLMScannerChain(opts: PresetOptions = {}): Scanner[] {
 
   if (opts.includeToolContradiction ?? true) {
     chain.push(ToolResultContradictionScanner);
+    chain.push(ToolResultContradictionScanner);
+    chain.push(ToolResultFactMismatchScanner);
+
   }
 
   return chain;
