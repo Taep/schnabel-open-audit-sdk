@@ -34,7 +34,7 @@ describe("scanner chain presets", () => {
       responseText: "Done. I successfully retrieved the results.",
     });
 
-    const scanners = createPostLLMScannerChain({ rulepackHotReload: false });
+    const scanners = createPostLLMScannerChain({ rulepackHotReload: false,  includeToolArgsGuards: false });
 
     const { findings } = await scanSignals(n, scanners, { mode: "audit", failFast: false });
 
