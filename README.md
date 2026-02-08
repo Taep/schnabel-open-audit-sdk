@@ -25,6 +25,7 @@ Evidence-first • Provenance-aware • Obfuscation-resistant
 - [Example: Usage with CloudBot](#example-usage-with-cloudbot)
 - [Example: Anthropic computer-use-demo (official Git source)](#example-anthropic-computer-use-demo-official-git-source)
 - [Usage and integration](#usage-and-integration)
+- [Audit vs enforce (blocking)](#audit-vs-enforce-blocking-dangerous-text)
 - [Red-team testing and adding rules](#red-team-testing-and-adding-rules)
 - [Red-team output: report and evidence](#5-red-team-output-report-and-evidence-one-file-per-run)
 - [Build, test, and performance](#build-test-and-performance)
@@ -452,6 +453,30 @@ In the **real Python repo**, you would at each hook build the same payload (user
 2. **Choose scanners** — Pre-LLM only, or tool-boundary, or full post-LLM chain (see presets above).
 3. **Call `runAudit(req, { scanners, ... })`** — You get `AuditResult`: `decision`, `findings`, `evidence`, and optional `evidenceFilePath` / `evidenceReportFilePath` if dump options are set.
 4. **Enforce policy** — Use `result.decision.action` (and optionally `result.findings`) to allow, warn, challenge, or block the request or response.
+
+### Audit vs enforce (blocking dangerous text)
+
+The SDK does not have separate “audit-only” and “block” modes. Every `runAudit` call returns a **decision** (`allow` | `allow_with_warning` | `challenge` | `block`). How you use it is up to you:
+
+| Use case | What you do |
+|----------|-------------|
+| **Audit / labeling** | Call `runAudit`, log or store `result.decision` and `result.findings`, attach labels. Do **not** reject the request or hide the response based on the decision. |
+| **Block dangerous text** | Call `runAudit` the same way. If `result.decision.action === "block"` or `"challenge"`, **reject** the request (e.g. do not call the LLM), **do not run** the tool, or **do not show** the response. The examples in this README (Pre-LLM, Tool-boundary, Post-LLM) all show this pattern. |
+
+To make the policy **stricter** (block more often), pass `policyConfig` when calling `runAudit`:
+
+```ts
+const result = await runAudit(req, {
+  scanners: createPreLLMScannerChain(),
+  policyConfig: {
+    blockAt: "high",      // block at high risk (default: "critical")
+    challengeAt: "medium", // challenge at medium (default: "high")
+  },
+});
+if (result.decision.action === "block" || result.decision.action === "challenge") {
+  // Reject request or response
+}
+```
 
 ### Example: pre-LLM only (prompt + RAG)
 
