@@ -22,6 +22,9 @@ export interface AuditRunOptions {
   scanOptions?: ScanOptions;
   policyConfig?: Partial<PolicyConfig>;
 
+  /** If set, reject requests whose prompt length exceeds this (performance/safety guard). */
+  maxPromptLength?: number;
+
   dumpEvidence?: boolean | SaveEvidenceOptions;
   dumpEvidenceReport?: boolean | SaveEvidenceReportOptions;
 
@@ -79,6 +82,12 @@ function uniqueStrings(xs: unknown[]): string[] {
 
 export async function runAudit(req: AuditRequest, opts: AuditRunOptions): Promise<AuditResult> {
   const createdAt = Date.now();
+
+  if (opts.maxPromptLength != null && req.prompt.length > opts.maxPromptLength) {
+    throw new Error(
+      `runAudit: prompt length ${req.prompt.length} exceeds maxPromptLength ${opts.maxPromptLength}`
+    );
+  }
 
   // Inject sessionId into actor
   const reqEffective: AuditRequest = opts.history

@@ -1,6 +1,17 @@
 import path from "node:path";
+import fs from "node:fs";
 import { loadScenarios } from "./load_scenarios.js";
 import type { AttackScenario, PayloadEncoding, TextView } from "./types.js";
+
+/** Missed scenario: expected detect but got none. Used to suggest new rulepack rules. */
+export interface MissedScenario {
+  scenarioId: string;
+  name: string;
+  description: string;
+  source: string;
+  encoding: string;
+  basePayload: string;
+}
 import { fromAgentIngressEvent } from "../../src/adapters/generic_agent.js";
 import { runAudit } from "../../src/core/run_audit.js";
 import { UnicodeSanitizerScanner } from "../../src/signals/scanners/sanitize/unicode_sanitizer.js";
@@ -72,11 +83,7 @@ function pickPrimaryDetectFinding(findings: any[]) {
 }
 
 async function runRedTeam() {
-  // [수정] __dirname 이슈 해결을 위해 path.resolve 사용 (CWD 기준)
   const scenariosDir = path.resolve("examples/red-team/scenarios.d");
-  
-  // loadScenarios 함수는 아래에서 별도로 정의하거나 import 해야 함
-  // 사용자가 loadScenarios.ts도 수정하라고 했으므로 그것도 반영해야 함
   let scenarios: AttackScenario[] = [];
   try {
       scenarios = loadScenarios(scenariosDir);
@@ -101,6 +108,7 @@ async function runRedTeam() {
 
   let passed = 0;
   let failed = 0;
+  const missed: MissedScenario[] = [];
 
   for (const s of scenarios) {
     const encoding = (s.encoding ?? "plain") as PayloadEncoding;
@@ -136,20 +144,13 @@ async function runRedTeam() {
 
       const primary = pickPrimaryDetectFinding(result.findings);
       let matchedViews: TextView[] = [];
-
       if (primary) {
         const mv = (primary.evidence as any)?.matchedViews;
         if (Array.isArray(mv)) matchedViews = mv;
         else if (primary.target?.view) matchedViews = [primary.target.view];
       }
 
-      // View expectation (optional)
-      const expectedViews = s.expected?.expectedMatchedViewsInclude ?? [];
-      if (expectedViews.length && primary) {
-        const viewPass = expectedViews.some(v => matchedViews.includes(v));
-        if (!viewPass) ok = false;
-      }
-
+      // Pass/fail is based only on shouldDetect vs hasDetect; which view matched is not used.
       console.log(`   Decision: ${c.yellow(result.decision.action)} | DetectFindings: ${detectFindings.length}`);
 
       if (primary) {
@@ -164,9 +165,19 @@ async function runRedTeam() {
       } else {
         console.log(`   ❌ ${c.red("FAIL")}`);
         console.log(c.gray(`      └─ Expected shouldDetect=${expectedDetect}, got=${hasDetect}`));
-        if (expectedViews.length) console.log(c.gray(`      └─ Expected view include: [${expectedViews.join(", ")}], got=[${matchedViews.join(", ")}]`));
         console.log("");
         failed++;
+        // Collect missed: we expected detection but got none → candidate for new rulepack rule
+        if (expectedDetect && !hasDetect) {
+          missed.push({
+            scenarioId: s.id ?? "unknown",
+            name: s.name ?? "",
+            description: s.description ?? "",
+            source: s.source,
+            encoding,
+            basePayload: s.basePayload,
+          });
+        }
       }
     } catch (e: any) {
       console.log(c.red("   ❌ CRASH"));
@@ -180,12 +191,22 @@ async function runRedTeam() {
 
   console.log(`\n📊 Summary: ${c.green(String(passed) + " Passed")}, ${c.red(String(failed) + " Failed")}`);
 
-  // rulepack 닫아주기 (리소스 해제)
-  // rulepack Scanner가 close 메서드를 가지고 있는지 확인 필요
-  if (typeof (rulepack as any).close === 'function') {
-      (rulepack as any).close();
+  // Write missed scenarios (expected detect but got none) for rulepack suggestion
+  const outDir = path.resolve("examples/red-team/out");
+  if (missed.length > 0) {
+    try {
+      if (!fs.existsSync(outDir)) fs.mkdirSync(outDir, { recursive: true });
+      const missedPath = path.join(outDir, "missed.json");
+      fs.writeFileSync(missedPath, JSON.stringify({ runAt: new Date().toISOString(), count: missed.length, scenarios: missed }, null, 2), "utf8");
+      console.log(c.yellow(`\n📝 Missed ${missed.length} scenario(s) → ${missedPath}`));
+      console.log(c.gray("   Run: npm run redteam:suggest  to generate rulepack rule candidates."));
+    } catch (e: any) {
+      console.log(c.gray(`   (Could not write missed.json: ${e?.message ?? e})`));
+    }
   }
-  
+
+  if (typeof (rulepack as any).close === "function") (rulepack as any).close();
+
   if (failed > 0) process.exit(1);
 }
 

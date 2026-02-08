@@ -213,24 +213,24 @@ export class SessionAggregator {
     lines.push(`- window: \`${new Date(s.startedAtMs).toISOString()} ~ ${new Date(s.endedAtMs).toISOString()}\``);
     lines.push("");
 
-    lines.push(`## A. Action 분포`);
+    lines.push(`## A. Action distribution`);
     for (const [k, v] of Object.entries(s.actions).sort((a, b) => b[1] - a[1])) {
       lines.push(`- ${k}: ${v}`);
     }
     lines.push("");
 
-    lines.push(`## B. Risk 분포(턴 기준)`);
+    lines.push(`## B. Risk distribution (by turn)`);
     for (const r of [...RISK_ORDER].reverse()) {
       lines.push(`- ${r}: ${s.risks[r] ?? 0}`);
     }
     lines.push("");
 
-    lines.push(`## C. Findings 요약`);
+    lines.push(`## C. Findings summary`);
     lines.push(`- total findings: ${s.findingsTotal}`);
     lines.push(`- by view: raw=${s.findingsByView.raw}, sanitized=${s.findingsByView.sanitized}, revealed=${s.findingsByView.revealed}, skeleton=${s.findingsByView.skeleton}`);
     lines.push("");
 
-    lines.push(`## D. Source별 Findings`);
+    lines.push(`## D. Findings by source`);
     for (const [k, v] of Object.entries(s.findingsBySource).sort((a, b) => b[1] - a[1])) {
       lines.push(`- ${k}: ${v}`);
     }
@@ -246,7 +246,7 @@ export class SessionAggregator {
     for (const x of s.topCategories) lines.push(`- ${x.category}: ${x.count}`);
     lines.push("");
 
-    lines.push(`## G. Timeline (최근 순)`);
+    lines.push(`## G. Timeline (most recent first)`);
     const recent = [...this.turnRecords].slice(-12).reverse();
     for (const t of recent) {
       lines.push(`- ${new Date(t.createdAt).toISOString()} | ${t.action.toUpperCase()} | risk=${t.risk} | detect=${t.detectFindings} | req=${t.requestId}`);

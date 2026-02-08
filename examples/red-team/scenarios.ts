@@ -1,4 +1,6 @@
-// examples/red-team/scenarios.ts
+/**
+ * Red-team scenario types. Each scenario must define expected.shouldDetect.
+ */
 
 export interface AttackExpectedResult {
   shouldDetect: boolean;
@@ -10,10 +12,8 @@ export interface AttackScenario {
   name: string;
   description?: string;
   source: "user" | "retrieval" | "system";
-  basePayload: string;  // <-- 옛날엔 payload였음
+  basePayload: string;
   encoding?: string;
-  
-  // [여기가 중요!] 이 expected 객체가 정의되어 있어야 합니다.
   expected: AttackExpectedResult;
 }
 

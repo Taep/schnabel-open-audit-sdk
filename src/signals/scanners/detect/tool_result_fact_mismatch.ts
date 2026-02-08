@@ -96,7 +96,7 @@ function extractFacts(toolName: string, result: unknown): Fact[] {
 }
 
 function findNumberClaim(response: string, alias: string): { claimed: number; index: number; match: string } | null {
-  // Patterns like: "balance is 100", "balance: 100", "잔액 100", "count=5"
+  // Patterns like: "balance is 100", "balance: 100", "count=5" (multilingual aliases supported)
   const a = alias.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
   const re = new RegExp(`\\b${a}\\b\\s*(?:is|=|:)?\\s*\\$?(-?\\d+(?:\\.\\d+)?)`, "i");
 
@@ -110,7 +110,7 @@ function findNumberClaim(response: string, alias: string): { claimed: number; in
 }
 
 function findCountClaim(response: string): { claimed: number; index: number; match: string } | null {
-  // Patterns like: "Found 5 results", "5 results", "결과 5개"
+  // Patterns like: "Found 5 results", "5 results", or locale-specific count phrases
   const patterns = [
     /\bfound\s+(\d+)\s+(results|items)\b/i,
     /\b(\d+)\s+(results|items)\b/i,

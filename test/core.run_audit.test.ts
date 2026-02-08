@@ -44,4 +44,19 @@ describe("L1->L2->L3 runAudit()", () => {
 
     expect(result.decision.action === "challenge" || result.decision.action === "block").toBe(true);
   });
+
+  it("throws when prompt exceeds maxPromptLength", async () => {
+    const req = fromAgentIngressEvent({
+      requestId: "r-audit-3",
+      timestamp: 1,
+      userPrompt: "x".repeat(100),
+    });
+
+    await expect(
+      runAudit(req, {
+        scanners: [KeywordInjectionScanner],
+        maxPromptLength: 50,
+      })
+    ).rejects.toThrow(/maxPromptLength/);
+  });
 });

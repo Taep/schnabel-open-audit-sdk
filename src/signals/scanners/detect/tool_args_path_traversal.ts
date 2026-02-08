@@ -13,15 +13,23 @@ function getToolCalls(input: NormalizedInput): any[] {
   return input.raw.toolCalls ?? [];
 }
 
-function walkStrings(x: unknown, cb: (value: string, path: string) => void, path = "$"): void {
+const WALK_MAX_DEPTH = 32;
+
+function walkStrings(
+  x: unknown,
+  cb: (value: string, path: string) => void,
+  path = "$",
+  depth = 0
+): void {
+  if (depth > WALK_MAX_DEPTH) return;
   if (typeof x === "string") return cb(x, path);
   if (Array.isArray(x)) {
-    for (let i = 0; i < x.length; i++) walkStrings(x[i], cb, `${path}[${i}]`);
+    for (let i = 0; i < x.length; i++) walkStrings(x[i], cb, `${path}[${i}]`, depth + 1);
     return;
   }
   if (x && typeof x === "object") {
     for (const [k, v] of Object.entries(x as Record<string, unknown>)) {
-      walkStrings(v, cb, `${path}.${k}`);
+      walkStrings(v, cb, `${path}.${k}`, depth + 1);
     }
   }
 }

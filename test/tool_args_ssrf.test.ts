@@ -19,4 +19,17 @@ describe("ToolArgsSSRFScanner", () => {
     const { findings } = await scanSignals(n, [ToolArgsSSRFScanner], { mode: "audit", failFast: false });
     expect(findings.some(f => f.scanner === "tool_args_ssrf" && f.risk === "high")).toBe(true);
   });
+
+  it("flags dangerous scheme (file://)", async () => {
+    const n = normalize({
+      requestId: "ssrf-2",
+      timestamp: 1,
+      prompt: "Hello",
+      toolCalls: [{ toolName: "read", args: { path: "file:///etc/passwd" } }],
+    });
+
+    const { findings } = await scanSignals(n, [ToolArgsSSRFScanner], { mode: "audit", failFast: false });
+    expect(findings.length).toBeGreaterThan(0);
+    expect(findings.some(f => f.scanner === "tool_args_ssrf" && f.tags?.includes("dangerous_scheme"))).toBe(true);
+  });
 });

@@ -15,18 +15,26 @@ function getToolCalls(input: NormalizedInput): any[] {
   return input.raw.toolCalls ?? [];
 }
 
-function walkStrings(x: unknown, cb: (value: string, path: string) => void, path = "$"): void {
+const WALK_MAX_DEPTH = 32;
+
+function walkStrings(
+  x: unknown,
+  cb: (value: string, path: string) => void,
+  path = "$",
+  depth = 0
+): void {
+  if (depth > WALK_MAX_DEPTH) return;
   if (typeof x === "string") {
     cb(x, path);
     return;
   }
   if (Array.isArray(x)) {
-    for (let i = 0; i < x.length; i++) walkStrings(x[i], cb, `${path}[${i}]`);
+    for (let i = 0; i < x.length; i++) walkStrings(x[i], cb, `${path}[${i}]`, depth + 1);
     return;
   }
   if (x && typeof x === "object") {
     for (const [k, v] of Object.entries(x as Record<string, unknown>)) {
-      walkStrings(v, cb, `${path}.${k}`);
+      walkStrings(v, cb, `${path}.${k}`, depth + 1);
     }
   }
 }
@@ -66,9 +74,28 @@ function isSuspiciousHostname(host: string): boolean {
   return false;
 }
 
+/** Schemes we consider for SSRF / internal access. Includes dangerous schemes. */
+const URL_SCHEMES = [
+  "http://",
+  "https://",
+  "file://",
+  "gopher://",
+  "dict://",
+  "ftp://",
+  "sftp://",
+];
+
 function looksLikeUrl(s: string): boolean {
   const t = s.trim().toLowerCase();
-  return t.startsWith("http://") || t.startsWith("https://");
+  return URL_SCHEMES.some((scheme) => t.startsWith(scheme));
+}
+
+function isDangerousScheme(urlStr: string): { hit: boolean; reason: string } {
+  const t = urlStr.trim().toLowerCase();
+  if (t.startsWith("file://")) return { hit: true, reason: "file:// scheme (local file access)" };
+  if (t.startsWith("gopher://")) return { hit: true, reason: "gopher:// scheme (internal network)" };
+  if (t.startsWith("dict://")) return { hit: true, reason: "dict:// scheme (internal network)" };
+  return { hit: false, reason: "" };
 }
 
 export const ToolArgsSSRFScanner: Scanner = {
@@ -87,6 +114,27 @@ export const ToolArgsSSRFScanner: Scanner = {
 
       walkStrings(args, (val, p) => {
         if (!looksLikeUrl(val)) return;
+
+        const schemeCheck = isDangerousScheme(val);
+        if (schemeCheck.hit) {
+          findings.push({
+            id: makeFindingId(this.name, input.requestId, `${toolName}:${i}:${p}`),
+            kind: "detect",
+            scanner: this.name,
+            score: 0.9,
+            risk: "high",
+            tags: ["tool", "ssrf", "dangerous_scheme"],
+            summary: "Dangerous URL scheme in tool args (e.g. file/gopher/dict).",
+            target: { field: "promptChunk", view: "raw", source: "tool", chunkIndex: i },
+            evidence: {
+              toolName,
+              argPath: p,
+              url: val,
+              reason: schemeCheck.reason,
+            },
+          });
+          return;
+        }
 
         let u: URL;
         try {

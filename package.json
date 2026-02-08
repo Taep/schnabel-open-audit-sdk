@@ -1,22 +1,23 @@
 {
   "name": "schnabel-open-audit-sdk",
   "version": "1.0.0",
-  "description": "",
+  "description": "LLM/agent audit SDK: scanner chain (sanitize→enrich→detect), policy decisions, evidence packages for prompt injection and tool-boundary security.",
   "main": "./dist/index.js",
-  "directories": {
-    "test": "test"
-  },
+  "directories": { "test": "test" },
   "scripts": {
     "build": "npm run clean && tsup src/index.ts --format esm,cjs --dts && node scripts/copy-assets.mjs",
     "test": "vitest",
     "typecheck": "tsc -p tsconfig.test.json --noEmit",
     "redteam": "tsx examples/red-team/runner.ts",
+    "redteam:suggest": "node examples/red-team/suggest-rulepack-from-missed.mjs",
+    "redteam:check": "tsx examples/red-team/check-coverage.ts",
     "clean": "node -e \"require('fs').rmSync('dist',{recursive:true,force:true})\"",
     "prepack": "npm run build"
   },
-  "keywords": [],
+  "keywords": ["llm", "agent", "audit", "prompt-injection", "security", "ssrf", "evidence", "policy", "scanner"],
   "author": "",
   "license": "ISC",
+  "repository": { "type": "git", "url": "https://github.com/schnabel-open-audit/schnabel-open-audit-sdk" },
   "type": "module",
   "devDependencies": {
     "@types/node": "^25.1.0",
@@ -33,7 +34,5 @@
       "require": "./dist/index.cjs"
     }
   },
-  "files": [
-    "dist"
-  ]
+  "files": ["dist"]
 }
