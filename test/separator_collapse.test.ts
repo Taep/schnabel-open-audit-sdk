@@ -21,8 +21,9 @@ describe("SeparatorCollapseScanner", () => {
 
     const { input } = await scanSignals(n, [UnicodeSanitizerScanner, SeparatorCollapseScanner], { mode: "audit" });
 
-    const chunk = input.views!.chunks![1].views.sanitized;
-    expect(chunk).toContain("비밀번호");
+    const chunk = input.views!.chunks?.[1]?.views.sanitized;
+    expect(chunk).toBeDefined();
+    expect(chunk!).toContain("비밀번호");
   });
 
   it("enables rulepack detection on dot-separated injection phrase", async () => {

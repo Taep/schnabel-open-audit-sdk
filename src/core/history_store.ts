@@ -13,11 +13,13 @@ export interface HistoryTurnV0 {
   failedTools: string[];
 
   // Short response snippet (for light heuristic comparisons)
-  responseSnippet?: string;
+  responseSnippet?: string | undefined;
 
   // Optional: signal digest (rule ids / categories)
   ruleIds?: string[];
   categories?: string[];
+  detectScanners?: string[];
+  detectTags?: string[];
 }
 
 export interface HistoryStore {

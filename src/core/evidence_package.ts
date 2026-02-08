@@ -26,11 +26,11 @@ export interface EvidencePackageV0 {
 
   // Raw digest: keep only hashes and short previews to reduce sensitive leakage.
   rawDigest: {
-    prompt: { hash: string; preview?: string; length: number };
-    promptChunks?: Array<{ source: string; hash: string; preview?: string; length: number }>;
-    toolCallsHash?: string;
-    toolResultsHash?: string;
-    responseTextHash?: string;
+    prompt: { hash: string; preview?: string | undefined; length: number };
+    promptChunks?: Array<{ source: string; hash: string; preview?: string | undefined; length: number }> | undefined;
+    toolCallsHash?: string | undefined;
+    toolResultsHash?: string | undefined;
+    responseTextHash?: string | undefined;
   };
 
   // L1 output (before L2 sanitizers mutate anything)
@@ -41,7 +41,7 @@ export interface EvidencePackageV0 {
   // L2 output (after sanitizers/enrichers)
   scanned: {
     canonical: NormalizedInput["canonical"];
-    views?: InputViews;
+    views?: InputViews | undefined;
   };
 
   scanners: Array<{ name: string; kind: string }>;
@@ -58,7 +58,7 @@ export interface EvidencePackageV0 {
 
   // Derived metadata helpful for audit/reporting
   meta: {
-    rulePackVersions?: string[]; // extracted from findings evidence if present
+    rulePackVersions?: string[] | undefined; // extracted from findings evidence if present
   };
 }
 
@@ -132,17 +132,19 @@ export function buildEvidencePackageV0(args: {
       preview: opts.includeRawPreviews ? previewText(rawPrompt, opts.previewChars) : undefined,
       length: rawPrompt.length,
     },
-    promptChunks: rawChunks.length
-      ? rawChunks.map(ch => ({
-          source: String(ch.source),
-          hash: sha256Hex(ch.text ?? ""),
-          preview: opts.includeRawPreviews ? previewText(ch.text ?? "", opts.previewChars) : undefined,
-          length: (ch.text ?? "").length,
-        }))
-      : undefined,
-    toolCallsHash: req.toolCalls ? hashOf(req.toolCalls) : undefined,
-    toolResultsHash: req.toolResults ? hashOf(req.toolResults) : undefined,
-    responseTextHash: req.responseText ? sha256Hex(req.responseText) : undefined,
+    ...(rawChunks.length
+      ? {
+          promptChunks: rawChunks.map(ch => ({
+            source: String(ch.source),
+            hash: sha256Hex(ch.text ?? ""),
+            preview: opts.includeRawPreviews ? previewText(ch.text ?? "", opts.previewChars) : undefined,
+            length: (ch.text ?? "").length,
+          })),
+        }
+      : {}),
+    ...(req.toolCalls ? { toolCallsHash: hashOf(req.toolCalls) } : {}),
+    ...(req.toolResults ? { toolResultsHash: hashOf(req.toolResults) } : {}),
+    ...(req.responseText ? { responseTextHash: sha256Hex(req.responseText) } : {}),
   };
 
   const scannerMeta = scanners.map(s => ({ name: s.name, kind: s.kind }));

@@ -113,7 +113,7 @@ export function createRulePackScanner(opts: RulePackScannerOptions = {}): Scanne
     return { hit: true, index: m.index, match: m[0] };
   };
 
-    const matchAcrossViews = (rule, viewMap: { raw: string; sanitized: string; revealed: string; skeleton: string }) => {
+    const matchAcrossViews = (rule: CompiledRule, viewMap: { raw: string; sanitized: string; revealed: string; skeleton: string }) => {
     const matchedViews: TextView[] = [];
     const details: Record<string, MatchDetail> = {};
 
@@ -178,6 +178,7 @@ export function createRulePackScanner(opts: RulePackScannerOptions = {}): Scanne
       const chunks = base.views!.chunks ?? [];
       for (let i = 0; i < chunks.length; i++) {
         const ch = chunks[i];
+        if (!ch) continue;
 
         for (const rule of rules) {
           if (!rule._scopes.includes("chunks")) continue;
@@ -187,7 +188,7 @@ export function createRulePackScanner(opts: RulePackScannerOptions = {}): Scanne
           if (!hit) continue;
 
           const view = hit.preferred;
-          const text = (ch.views as any)[view] ?? "";
+          const text = (ch.views as unknown as Record<string, string>)[view] ?? "";
           const idx = hit.detail?.index ?? -1;
 
           findings.push({

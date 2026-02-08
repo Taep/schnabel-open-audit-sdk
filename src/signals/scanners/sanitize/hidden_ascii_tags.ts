@@ -111,7 +111,7 @@ export const HiddenAsciiTagsScanner: Scanner = {
       canonical: {
         ...base.canonical,
         prompt: views.prompt.revealed,
-        promptChunksCanonical: outChunks.length ? outChunks : undefined,
+        ...(outChunks.length ? { promptChunksCanonical: outChunks } : {}),
       },
       features: {
         ...base.features,

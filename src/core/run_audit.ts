@@ -55,14 +55,14 @@ export interface AuditResult {
 
   evidence: EvidencePackageV0;
 
-  evidenceFilePath?: string;
-  evidenceReportFilePath?: string;
+  evidenceFilePath?: string | undefined;
+  evidenceReportFilePath?: string | undefined;
 
-  sessionRootDir?: string;
-  turnDir?: string;
-  sessionSummaryPath?: string;
+  sessionRootDir?: string | undefined;
+  turnDir?: string | undefined;
+  sessionSummaryPath?: string | undefined;
 
-  dumpDecision?: DumpDecision;
+  dumpDecision?: DumpDecision | undefined;
 }
 
 function tryCloseScanners(scanners: Scanner[]) {
@@ -157,7 +157,7 @@ export async function runAudit(req: AuditRequest, opts: AuditRunOptions): Promis
     const cfg = opts.dumpPolicy === true ? {} : opts.dumpPolicy;
 
     dumpDecision = decideDumpPolicy(
-      { requestId: reqEffective.requestId, action: decision.action as any, risk: decision.risk, findings },
+      { requestId: reqEffective.requestId, action: decision.action, risk: decision.risk, findings },
       cfg
     );
 
@@ -195,7 +195,7 @@ export async function runAudit(req: AuditRequest, opts: AuditRunOptions): Promis
     const turn: HistoryTurnV0 = {
       requestId: reqEffective.requestId,
       createdAtMs: createdAt,
-      action: decision.action as any,
+      action: decision.action,
       risk: decision.risk,
       succeededTools,
       failedTools,

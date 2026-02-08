@@ -27,7 +27,7 @@ function parseHeaderVersion(lines: string[]): string {
   // # Version: 17.0.0
   for (const line of lines.slice(0, 40)) {
     const m = line.match(/^#\s*Version:\s*([0-9.]+)/i);
-    if (m) return m[1];
+    if (m && m[1]) return m[1];
   }
   return "unknown";
 }
@@ -66,11 +66,17 @@ function loadConfusables(): ConfusablesData {
 
     // Format:
     // <src> ; <dst> ; <type> # comment
-    const parts = t.split("#")[0].split(";").map(x => x.trim());
+    const beforeHash = t.split("#")[0];
+    if (beforeHash === undefined) continue;
+    const parts = beforeHash.split(";").map(x => x.trim());
     if (parts.length < 2) continue;
 
-    const srcSeq = parseHexSeq(parts[0]);
-    const dstSeq = parseHexSeq(parts[1]);
+    const p0 = parts[0];
+    const p1 = parts[1];
+    if (p0 === undefined || p1 === undefined) continue;
+
+    const srcSeq = parseHexSeq(p0);
+    const dstSeq = parseHexSeq(p1);
     if (!srcSeq.length || !dstSeq.length) continue;
 
     map.set(keyOf(srcSeq), dstSeq);
@@ -92,7 +98,8 @@ function fromCodePoints(cps: number[]): string {
   const CHUNK = 4096;
   let out = "";
   for (let i = 0; i < cps.length; i += CHUNK) {
-    out += String.fromCodePoint(...cps.slice(i, i + CHUNK));
+    const chunk = cps.slice(i, i + CHUNK).filter((n): n is number => n !== undefined);
+    out += String.fromCodePoint(...chunk);
   }
   return out;
 }
@@ -121,7 +128,8 @@ function skeletonize(text: string, data: ConfusablesData): { nfkc: string; skele
     }
 
     if (!matched) {
-      out.push(cps[i]);
+      const cp = cps[i];
+      if (cp !== undefined) out.push(cp);
       i += 1;
     }
   }
@@ -185,7 +193,7 @@ export const Uts39ConfusablesScanner: Scanner = {
         target,
         evidence: {
           uts39Version: data.version,
-          replacedMappings: replaced,
+          replacedMappings: replaced as number,
           nfkcPreview: preview(nfkc),
           skeletonPreview: preview(skeleton),
           mixedScripts: mixed,
@@ -195,15 +203,16 @@ export const Uts39ConfusablesScanner: Scanner = {
     };
 
     // 1) Prompt
-    check(input.canonical.prompt, { field: "prompt" }, input.requestId, "prompt");
+    check(input.canonical.prompt, { field: "prompt", view: "raw" }, input.requestId, "prompt");
 
     // 2) Provenance chunks
     const chunks = input.canonical.promptChunksCanonical ?? [];
     for (let i = 0; i < chunks.length; i++) {
       const ch = chunks[i];
+      if (!ch) continue;
       check(
         ch.text,
-        { field: "promptChunk", source: ch.source, chunkIndex: i },
+        { field: "promptChunk", view: "raw", source: ch.source, chunkIndex: i },
         input.requestId,
         `chunk:${i}:${ch.source}`
       );

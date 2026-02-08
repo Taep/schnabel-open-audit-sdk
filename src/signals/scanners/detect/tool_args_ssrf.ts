@@ -35,7 +35,9 @@ function isPrivateIPv4(ip: string): boolean {
   const parts = ip.split(".").map(x => Number(x));
   if (parts.length !== 4 || parts.some(n => !Number.isFinite(n))) return false;
 
-  const [a, b] = parts;
+  const a = parts[0];
+  const b = parts[1];
+  if (a === undefined || b === undefined) return false;
 
   if (a === 10) return true;
   if (a === 127) return true;

@@ -18,8 +18,8 @@ describe("ToolResultContradictionScanner", () => {
     const { findings } = await scanSignals(n, [ToolResultContradictionScanner], { mode: "audit", failFast: false });
 
     expect(findings.length).toBe(1);
-    expect(findings[0].scanner).toBe("tool_result_contradiction");
-    expect(findings[0].risk).toBe("high");
+    expect(findings[0]!.scanner).toBe("tool_result_contradiction");
+    expect(findings[0]!.risk).toBe("high");
   });
 
   it("flags medium risk when tool succeeded but response claims failure", async () => {
@@ -34,7 +34,7 @@ describe("ToolResultContradictionScanner", () => {
     const { findings } = await scanSignals(n, [ToolResultContradictionScanner], { mode: "audit", failFast: false });
 
     expect(findings.length).toBe(1);
-    expect(findings[0].risk).toBe("medium");
+    expect(findings[0]!.risk).toBe("medium");
   });
 
   it("does nothing when responseText is missing", async () => {

@@ -1,4 +1,4 @@
-import type { NormalizedInput, TextView, TextViewSet } from "../normalizer/types.js";
+import type { NormalizedInput, TextView, TextViewSet, InputViews } from "../normalizer/types.js";
 
 // Scan all views, skeleton last
 export const VIEW_SCAN_ORDER: TextView[] = ["raw", "sanitized", "revealed", "skeleton"];
@@ -25,11 +25,11 @@ export function ensureViews(input: NormalizedInput): NormalizedInput {
   if (input.views) return input;
 
   const chunks = input.canonical.promptChunksCanonical ?? [];
-  const views = {
+  const views: InputViews = {
     prompt: initViewSet(input.canonical.prompt),
-    chunks: chunks.length
-      ? chunks.map(ch => ({ source: ch.source, views: initViewSet(ch.text) }))
-      : undefined,
+    ...(chunks.length
+      ? { chunks: chunks.map(ch => ({ source: ch.source, views: initViewSet(ch.text) })) }
+      : {}),
   };
 
   return { ...input, views };

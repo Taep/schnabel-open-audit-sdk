@@ -151,7 +151,7 @@ async function saveState(sessionRoot: string, state: SessionStateV0): Promise<vo
 export async function dumpEvidenceToSessionLayout(
   evidence: EvidencePackageV0,
   opts: SessionDumpOptions
-): Promise<{ sessionRoot: string; turnDir: string; evidencePath: string; reportPath: string; summaryPath?: string }> {
+): Promise<{ sessionRoot: string; turnDir: string; evidencePath: string; reportPath: string; summaryPath?: string | undefined }> {
   const baseDir = opts.baseDir ?? "artifacts/audit";
   const sessionId = safeName(opts.sessionId);
   const sessionRoot = path.resolve(baseDir, sessionId);

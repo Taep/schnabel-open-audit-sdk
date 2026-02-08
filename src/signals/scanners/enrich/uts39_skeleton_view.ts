@@ -23,7 +23,7 @@ let CACHE: ConfusablesData | null = null;
 function parseHeaderVersion(lines: string[]): string {
   for (const line of lines.slice(0, 50)) {
     const m = line.match(/^#\s*Version:\s*([0-9.]+)/i);
-    if (m) return m[1];
+    if (m && m[1]) return m[1];
   }
   return "unknown";
 }
@@ -59,11 +59,17 @@ function loadConfusables(): ConfusablesData {
     if (!t || t.startsWith("#")) continue;
 
     // Format: <src> ; <dst> ; <type> # comment
-    const parts = t.split("#")[0].split(";").map(x => x.trim());
+    const beforeHash = t.split("#")[0];
+    if (beforeHash === undefined) continue;
+    const parts = beforeHash.split(";").map(x => x.trim());
     if (parts.length < 2) continue;
 
-    const srcSeq = parseHexSeq(parts[0]);
-    const dstSeq = parseHexSeq(parts[1]);
+    const p0 = parts[0];
+    const p1 = parts[1];
+    if (p0 === undefined || p1 === undefined) continue;
+
+    const srcSeq = parseHexSeq(p0);
+    const dstSeq = parseHexSeq(p1);
     if (!srcSeq.length || !dstSeq.length) continue;
 
     map.set(keyOf(srcSeq), dstSeq);
@@ -84,7 +90,8 @@ function fromCodePoints(cps: number[]): string {
   const CHUNK = 4096;
   let out = "";
   for (let i = 0; i < cps.length; i += CHUNK) {
-    out += String.fromCodePoint(...cps.slice(i, i + CHUNK));
+    const chunk = cps.slice(i, i + CHUNK).filter((n): n is number => n !== undefined);
+    out += String.fromCodePoint(...chunk);
   }
   return out;
 }
@@ -116,7 +123,8 @@ function skeletonize(text: string, data: ConfusablesData): string {
     }
 
     if (!matched) {
-      out.push(cps[i]);
+      const cp = cps[i];
+      if (cp !== undefined) out.push(cp);
       i += 1;
     }
   }

@@ -92,19 +92,21 @@ export function fromAgentIngressEvent(e: AgentIngressEvent): AuditRequest {
   return {
     requestId: e.requestId,
     timestamp: e.timestamp,
-    actor: e.actor,
-    model: e.model,
+    ...(e.actor !== undefined ? { actor: e.actor } : {}),
+    ...(e.model !== undefined ? { model: e.model } : {}),
 
     // Compat prompt: keep the user's raw prompt string.
     prompt: e.userPrompt,
 
     // Provenance-preserving chunks: system/developer/user/retrieval separated.
-    promptChunks: buildPromptChunks(e),
+    ...((): { promptChunks?: SourcedText[] } => {
+      const chunks = buildPromptChunks(e);
+      return chunks ? { promptChunks: chunks } : {};
+    })(),
 
-    toolCalls: e.toolCalls,
-    toolResults: e.toolResults,
-
-    responseText: e.responseText,
+    ...(e.toolCalls !== undefined ? { toolCalls: e.toolCalls } : {}),
+    ...(e.toolResults !== undefined ? { toolResults: e.toolResults } : {}),
+    ...(e.responseText !== undefined ? { responseText: e.responseText } : {}),
 
     // Keep upstream metadata. Put retrieval doc meta here (not the full text).
     metadata: {

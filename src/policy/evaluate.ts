@@ -47,7 +47,7 @@ function maxRisk(findings: Finding[]): RiskLevel {
     const idx = RISK_ORDER.indexOf(f.risk);
     if (idx > maxIdx) maxIdx = idx;
   }
-  return RISK_ORDER[maxIdx];
+  return RISK_ORDER[maxIdx] ?? "none";
 }
 
 function riskMeetsOrExceeds(risk: RiskLevel, threshold: RiskLevel): boolean {

@@ -24,7 +24,7 @@ describe("L0 adapter: AgentIngressEvent -> AuditRequest", () => {
 
     // L0: provenance chunks exist and keep sources separated
     expect(req.promptChunks?.length).toBeGreaterThan(0);
-    expect(req.promptChunks?.[0].source).toBe("system");
+    expect(req.promptChunks?.[0]?.source).toBe("system");
 
     // L1 normalize still works and trims canonical prompt
     const n = normalize(req);

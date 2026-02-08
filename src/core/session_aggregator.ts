@@ -18,8 +18,8 @@ export interface TurnRecord {
   topRules: Array<{ ruleId: string; count: number }>;
   topCategories: Array<{ category: string; count: number }>;
 
-  evidenceFilePath?: string;
-  reportFilePath?: string;
+  evidenceFilePath?: string | undefined;
+  reportFilePath?: string | undefined;
 }
 
 export interface SessionSummary {
@@ -78,7 +78,7 @@ function countBySource(findings: Finding[]): Record<string, number> {
 
   for (const f of findings) {
     if (f.target.field === "prompt") {
-      out.prompt += 1;
+      out.prompt = (out.prompt ?? 0) + 1;
     } else {
       const s = f.target.source ?? "unknown";
       out[s] = (out[s] ?? 0) + 1;
@@ -89,9 +89,9 @@ function countBySource(findings: Finding[]): Record<string, number> {
 
 function topN(map: Map<string, number>, n = 5): Array<{ key: string; count: number }> {
   return Array.from(map.entries())
-    .sort((a, b) => b[1] - a[1])
+    .sort((a, b) => (b[1] ?? 0) - (a[1] ?? 0))
     .slice(0, n)
-    .map(([key, count]) => ({ key, count }));
+    .map(([key, count]) => ({ key, count: count ?? 0 }));
 }
 
 function extractRuleAndCategoryCounts(findings: Finding[]) {
@@ -153,8 +153,8 @@ export class SessionAggregator {
 
     this.findingsTotal += findings.length;
 
-    for (const v of Object.keys(byView) as TextView[]) this.findingsByView[v] += byView[v];
-    for (const k of Object.keys(bySource)) this.findingsBySource[k] = (this.findingsBySource[k] ?? 0) + bySource[k];
+    for (const v of Object.keys(byView) as TextView[]) this.findingsByView[v] += (byView[v] ?? 0);
+    for (const k of Object.keys(bySource)) this.findingsBySource[k] = (this.findingsBySource[k] ?? 0) + (bySource[k] ?? 0);
 
     const { ruleCounts, catCounts } = extractRuleAndCategoryCounts(findings);
     for (const [k, c] of ruleCounts.entries()) this.ruleCounts.set(k, (this.ruleCounts.get(k) ?? 0) + c);

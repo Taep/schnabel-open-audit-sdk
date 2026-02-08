@@ -7,11 +7,11 @@ type JsonSafe =
   | { [k: string]: JsonSafe };
 
 function toJsonSafe(value: unknown, seen: WeakSet<object>): JsonSafe {
-  if (value === null) return null;
+  if (value === null || value === undefined) return null;
 
   const t = typeof value;
 
-  if (t === "string" || t === "number" || t === "boolean") return value as any;
+  if (t === "string" || t === "number" || t === "boolean") return value as JsonSafe;
 
   if (t === "bigint") return value.toString();
   if (t === "undefined") return null;
@@ -24,8 +24,8 @@ function toJsonSafe(value: unknown, seen: WeakSet<object>): JsonSafe {
 
   if (t === "object") {
     const obj = value as Record<string, unknown>;
-    if (seen.has(obj as any)) return "[Circular]";
-    seen.add(obj as any);
+    if (seen.has(obj as object)) return "[Circular]";
+    seen.add(obj as object);
 
     const out: Record<string, JsonSafe> = {};
     for (const k of Object.keys(obj).sort()) {

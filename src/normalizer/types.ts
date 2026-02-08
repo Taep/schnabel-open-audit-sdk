@@ -34,7 +34,7 @@ export interface ChunkViews {
 
 export interface InputViews {
   prompt: TextViewSet;
-  chunks?: ChunkViews[];
+  chunks?: ChunkViews[] | undefined;
 }
 
 /**
@@ -44,8 +44,8 @@ export interface InputViews {
 export interface AuditRequest {
   requestId: string;
   timestamp: number; // epoch milliseconds
-  actor?: { userId?: string; sessionId?: string; ip?: string };
-  model?: { name?: string; provider?: string };
+  actor?: { userId?: string; sessionId?: string; ip?: string } | undefined;
+  model?: { name?: string; provider?: string } | undefined;
 
   /**
    * Primary prompt text (compat path).
@@ -91,7 +91,7 @@ export interface NormalizedInput {
     /**
      * Optional: provenance-preserving canonical chunks.
      */
-    promptChunksCanonical?: SourcedText[];
+    promptChunksCanonical?: SourcedText[] | undefined;
 
     /**
      * Deterministic JSON strings for tool calls/results.
@@ -99,14 +99,14 @@ export interface NormalizedInput {
     toolCallsJson: string;
     toolResultsJson: string;
 
-    responseText?: string;
+    responseText?: string | undefined;
   };
 
   /**
    * Optional multi-view texts maintained by L2 sanitizers/detectors.
    * L1 normalize does not need to populate this.
    */
-  views?: InputViews;
+  views?: InputViews | undefined;
 
   features: {
     hasToolCalls: boolean;
