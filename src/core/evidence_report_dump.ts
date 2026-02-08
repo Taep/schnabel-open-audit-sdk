@@ -13,6 +13,17 @@ function safeName(s: string): string {
   return s.replace(/[^a-zA-Z0-9._-]/g, "_");
 }
 
+function filenameTimestamp(ms: number): string {
+  const d = new Date(ms);
+  const y = d.getFullYear();
+  const M = String(d.getMonth() + 1).padStart(2, "0");
+  const D = String(d.getDate()).padStart(2, "0");
+  const h = String(d.getHours()).padStart(2, "0");
+  const m = String(d.getMinutes()).padStart(2, "0");
+  const s = String(d.getSeconds()).padStart(2, "0");
+  return `${y}${M}${D}-${h}${m}${s}`;
+}
+
 export async function saveEvidenceReportMarkdown(
   markdown: string,
   opts: SaveEvidenceReportOptions = {}
@@ -32,7 +43,8 @@ export async function saveEvidenceReportEN(
 ): Promise<string> {
   const outDir = opts.outDir ?? "artifacts/reports";
   const safeRequestId = safeName(evidence.requestId || "unknown");
-  const fileName = opts.fileName ?? `${safeRequestId}.${evidence.generatedAtMs}.report.en.md`;
+  const ts = evidence.generatedAtMs ?? Date.now();
+  const fileName = opts.fileName ?? `${filenameTimestamp(ts)}_${safeRequestId}.report.en.md`;
 
   const md = renderEvidenceReportEN(evidence, {
   maxPreviewChars: 120,

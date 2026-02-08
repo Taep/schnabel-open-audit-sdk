@@ -14,6 +14,7 @@ export interface MissedScenario {
 }
 import { fromAgentIngressEvent } from "../../src/adapters/generic_agent.js";
 import { runAudit } from "../../src/core/run_audit.js";
+import { renderEvidenceReportEN } from "../../src/core/evidence_report_en.js";
 import { UnicodeSanitizerScanner } from "../../src/signals/scanners/sanitize/unicode_sanitizer.js";
 import { HiddenAsciiTagsScanner } from "../../src/signals/scanners/sanitize/hidden_ascii_tags.js";
 import { SeparatorCollapseScanner } from "../../src/signals/scanners/sanitize/separator_collapse.js";
@@ -82,21 +83,38 @@ function pickPrimaryDetectFinding(findings: any[]) {
   return detect[0];
 }
 
+/** Run timestamp for file names: YYYYMMDD-HHmmss */
+function runTimestamp(): string {
+  const d = new Date();
+  const y = d.getFullYear();
+  const M = String(d.getMonth() + 1).padStart(2, "0");
+  const D = String(d.getDate()).padStart(2, "0");
+  const h = String(d.getHours()).padStart(2, "0");
+  const m = String(d.getMinutes()).padStart(2, "0");
+  const s = String(d.getSeconds()).padStart(2, "0");
+  return `${y}${M}${D}-${h}${m}${s}`;
+}
+
 async function runRedTeam() {
   const scenariosDir = path.resolve("examples/red-team/scenarios.d");
+  const redTeamOutDir = path.resolve("examples/red-team/out");
+  const ts = runTimestamp();
   let scenarios: AttackScenario[] = [];
   try {
-      scenarios = loadScenarios(scenariosDir);
-  } catch(e) {
-      console.error(c.red(`Failed to load scenarios: ${e}`));
-      process.exit(1);
+    scenarios = loadScenarios(scenariosDir);
+  } catch (e) {
+    console.error(c.red(`Failed to load scenarios: ${e}`));
+    process.exit(1);
   }
+
+  if (!fs.existsSync(redTeamOutDir)) fs.mkdirSync(redTeamOutDir, { recursive: true });
+  fs.mkdirSync(path.join(redTeamOutDir, "evidence"), { recursive: true });
+  fs.mkdirSync(path.join(redTeamOutDir, "reports"), { recursive: true });
 
   console.log(c.yellow("🔥 Schnabel Red Team Suite"));
   console.log(c.gray(`Loaded ${scenarios.length} scenarios from ${scenariosDir}`));
-  console.log(c.gray("==================================================\n"));
+  console.log(c.gray(`Run: ${ts} → ${redTeamOutDir}/evidence (one file), ${redTeamOutDir}/reports\n`));
 
-  // Scanner chain (sanitize -> enrich -> detect)
   const rulepack = createRulePackScanner({ hotReload: false, logger: () => {} });
   const scanners = [
     UnicodeSanitizerScanner,
@@ -109,12 +127,13 @@ async function runRedTeam() {
   let passed = 0;
   let failed = 0;
   const missed: MissedScenario[] = [];
+  type RunEntry = { scenario: AttackScenario; encoding: string; result?: Awaited<ReturnType<typeof runAudit>>; ok?: boolean; error?: string };
+  const runEntries: RunEntry[] = [];
 
   for (const s of scenarios) {
     const encoding = (s.encoding ?? "plain") as PayloadEncoding;
     const payload = applyEncoding(s.basePayload, encoding);
 
-    // Build ingress event (use adapter to keep provenance consistent)
     const event = {
       requestId: `rt-${s.id}-${Date.now()}`,
       timestamp: Date.now(),
@@ -125,12 +144,11 @@ async function runRedTeam() {
 
     const req = fromAgentIngressEvent(event as any);
 
-    console.log(`⚔️  ${c.blue(s.name)} (${c.gray(s.id || 'no-id')})`);
+    console.log(`⚔️  ${c.blue(s.name)} (${c.gray(s.id || "no-id")})`);
     console.log(c.gray(`   Desc: ${s.description}`));
     console.log(c.gray(`   Source=${s.source}, Encoding=${encoding}`));
 
     try {
-      // ✅ IMPORTANT: runAudit MUST receive scanners via opts
       const result = await runAudit(req, {
         scanners,
         scanOptions: { mode: "audit", failFast: false },
@@ -138,9 +156,8 @@ async function runRedTeam() {
 
       const detectFindings = result.findings.filter(f => f.kind === "detect");
       const hasDetect = detectFindings.length > 0;
-
       const expectedDetect = s.expected?.shouldDetect ?? true;
-      let ok = (hasDetect === expectedDetect);
+      const ok = hasDetect === expectedDetect;
 
       const primary = pickPrimaryDetectFinding(result.findings);
       let matchedViews: TextView[] = [];
@@ -150,9 +167,9 @@ async function runRedTeam() {
         else if (primary.target?.view) matchedViews = [primary.target.view];
       }
 
-      // Pass/fail is based only on shouldDetect vs hasDetect; which view matched is not used.
-      console.log(`   Decision: ${c.yellow(result.decision.action)} | DetectFindings: ${detectFindings.length}`);
+      runEntries.push({ scenario: s, encoding, result, ok });
 
+      console.log(`   Decision: ${c.yellow(result.decision.action)} | DetectFindings: ${detectFindings.length}`);
       if (primary) {
         console.log(`   Primary: ${primary.scanner} | risk=${primary.risk} | view=${primary.target.view} | matchedViews=[${matchedViews.join(", ")}]`);
       } else {
@@ -167,7 +184,6 @@ async function runRedTeam() {
         console.log(c.gray(`      └─ Expected shouldDetect=${expectedDetect}, got=${hasDetect}`));
         console.log("");
         failed++;
-        // Collect missed: we expected detection but got none → candidate for new rulepack rule
         if (expectedDetect && !hasDetect) {
           missed.push({
             scenarioId: s.id ?? "unknown",
@@ -180,14 +196,112 @@ async function runRedTeam() {
         }
       }
     } catch (e: any) {
+      const errMsg = String(e?.message ?? e);
+      runEntries.push({ scenario: s, encoding, ok: false, error: errMsg });
       console.log(c.red("   ❌ CRASH"));
-      console.log(c.red(`      └─ ${String(e?.message ?? e)}`));
+      console.log(c.red(`      └─ ${errMsg}`));
       console.log("");
       failed++;
     }
 
     console.log(c.gray("--------------------------------------------------"));
   }
+
+  const byAction: Record<string, number> = { allow: 0, allow_with_warning: 0, challenge: 0, block: 0 };
+  const byRisk: Record<string, number> = { none: 0, low: 0, medium: 0, high: 0, critical: 0 };
+  let crashCount = 0;
+  for (const e of runEntries) {
+    if (e.error) {
+      crashCount++;
+      continue;
+    }
+    if (e.result?.decision) {
+      const a = e.result.decision.action ?? "allow";
+      byAction[a] = (byAction[a] ?? 0) + 1;
+      const r = e.result.decision.risk ?? "none";
+      byRisk[r] = (byRisk[r] ?? 0) + 1;
+    }
+  }
+
+  const singleEvidencePath = path.join(redTeamOutDir, "evidence", `${ts}.redteam.evidence.json`);
+  const redTeamEvidence = {
+    schema: "schnabel-redteam-evidence-v0",
+    runId: ts,
+    runAt: new Date().toISOString(),
+    summary: { total: scenarios.length, passed, failed, crashed: crashCount },
+    entries: runEntries.map((e) => {
+      if (e.error) {
+        return { scenarioId: e.scenario.id ?? null, scenarioName: e.scenario.name, encoding: e.encoding, ok: false, error: e.error };
+      }
+      return {
+        scenarioId: e.scenario.id ?? null,
+        scenarioName: e.scenario.name,
+        encoding: e.encoding,
+        ok: e.ok,
+        evidence: e.result!.evidence,
+      };
+    }),
+  };
+  fs.writeFileSync(singleEvidencePath, JSON.stringify(redTeamEvidence, null, 2), "utf8");
+  console.log(c.gray(`\n📦 Evidence: ${singleEvidencePath}`));
+
+  const singleReportPath = path.join(redTeamOutDir, "reports", `${ts}.redteam.report.en.md`);
+  const reportParts: string[] = [
+    `# Red Team Run`,
+    ``,
+    `**Run:** \`${ts}\` · **Time:** ${new Date().toISOString()}`,
+    ``,
+    `## Summary`,
+    ``,
+    `| Metric | Count |`,
+    `|--------|-------|`,
+    `| **Scenarios audited** | ${scenarios.length} |`,
+    `| ✅ Passed | ${passed} |`,
+    `| ❌ Failed | ${failed} |`,
+    `| ❌ Crashed | ${crashCount} |`,
+    ``,
+    `### By decision (action)`,
+    ``,
+    `| Action | Count |`,
+    `|--------|-------|`,
+    `| allow | ${byAction.allow} |`,
+    `| allow_with_warning | ${byAction.allow_with_warning} |`,
+    `| challenge | ${byAction.challenge} |`,
+    `| block | ${byAction.block} |`,
+    ``,
+    `### By risk level`,
+    ``,
+    `| Risk | Count |`,
+    `|------|-------|`,
+    `| none | ${byRisk.none} |`,
+    `| low | ${byRisk.low} |`,
+    `| medium | ${byRisk.medium} |`,
+    `| high | ${byRisk.high} |`,
+    `| critical | ${byRisk.critical} |`,
+    ``,
+    `---`,
+    ``,
+    `## Scenario details`,
+    ``,
+  ];
+  for (const entry of runEntries) {
+    const { scenario: s, encoding, result, ok, error } = entry;
+    const verdict = ok === true ? "✅ PASS" : ok === false && error ? "❌ CRASH" : "❌ FAIL";
+    reportParts.push(`## ${verdict} · ${s.name} (\`${s.id ?? "n/a"}\`)`);
+    reportParts.push(``);
+    reportParts.push(`- **Source:** ${s.source} · **Encoding:** ${encoding}`);
+    reportParts.push(``);
+    if (result?.evidence) {
+      reportParts.push(renderEvidenceReportEN(result.evidence, { maxPreviewChars: 100, includeNotes: true, includeDetails: false }));
+    } else if (error) {
+      reportParts.push("```text\n❌ CRASH\n   └─ " + error + "\n```");
+    }
+    reportParts.push(``);
+    reportParts.push(`---`);
+    reportParts.push(``);
+  }
+  fs.writeFileSync(singleReportPath, reportParts.join("\n"), "utf8");
+  console.log(c.gray(`\n📄 Report: ${singleReportPath}`));
 
   console.log(`\n📊 Summary: ${c.green(String(passed) + " Passed")}, ${c.red(String(failed) + " Failed")}`);
 

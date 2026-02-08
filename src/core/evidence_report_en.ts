@@ -17,6 +17,17 @@ function clip(s: string, n: number): string {
   return t.slice(0, n) + "…";
 }
 
+function formatTimestamp(ms: number): string {
+  const d = new Date(ms);
+  const y = d.getFullYear();
+  const M = String(d.getMonth() + 1).padStart(2, "0");
+  const D = String(d.getDate()).padStart(2, "0");
+  const h = String(d.getHours()).padStart(2, "0");
+  const m = String(d.getMinutes()).padStart(2, "0");
+  const s = String(d.getSeconds()).padStart(2, "0");
+  return `${y}-${M}-${D} ${h}:${m}:${s}`;
+}
+
 function badgeForAction(action: VerdictAction): string {
   switch (action) {
     case "allow": return "✅ ALLOW";
@@ -140,10 +151,7 @@ ${list}
 }
 
 /**
- * RedTeam-like markdown report:
- * - Main summary in a text block (terminal style)
- * - Minimal notes for humans
- * - Optional technical details hidden
+ * Human-readable audit report (terminal-style block first, then notes and optional details).
  */
 export function renderEvidenceReportEN(e: EvidencePackageV0, opts: ReportOptions = {}): string {
   const maxN = opts.maxPreviewChars ?? 120;
@@ -152,40 +160,56 @@ export function renderEvidenceReportEN(e: EvidencePackageV0, opts: ReportOptions
 
   const action = e.decision.action as VerdictAction;
   const badge = badgeForAction(action);
-
   const detectFindings = (e.findings ?? []).filter((f: any) => f.kind === "detect");
   const primary = pickPrimaryDetectFinding(e);
-
   const sources = summarizeSources(e);
   const indicators = obfuscationBadges(e);
-
   const primaryLine = primary
     ? `Primary: ${primary.scanner} | risk=${primary.risk} | view=${primary.target.view} | ${matchedViewsLine(primary)}`
-    : `Primary: N/A`;
-
+    : "Primary: N/A";
   const decisionLine = `Decision: ${action} | DetectFindings: ${detectFindings.length} | TotalFindings: ${(e.findings ?? []).length}`;
+  const ts = e.generatedAtMs != null ? formatTimestamp(e.generatedAtMs) : new Date().toISOString();
 
-  const reportHeader = `# ${badge} Schnabel Audit (RedTeam-style)
+  const terminalBlock = `\`\`\`text
+⚔️  Audit (${e.requestId})
+   Timestamp: ${ts}
+   Source: ${sources}
 
-\`\`\`text
-⚔️  Audit Turn (${e.requestId})
-Source=${sources}
-${decisionLine}
-${primaryLine}
-Rule: ${ruleLine(primary)}
-Indicators: ${indicators}
-RootHash: ${e.integrity?.rootHash}
+   ${decisionLine}
+   ${primaryLine}
+   Rule: ${ruleLine(primary)}
+   Indicators: ${indicators}
+
+   RootHash: ${e.integrity?.rootHash}
 --------------------------------------------------
-\`\`\`
+\`\`\``;
+
+  const header = `# ${badge} Schnabel Audit
+
+**Request:** \`${e.requestId}\` · **Time:** ${ts}
+
+---
+
+## Result (at a glance)
+
+${terminalBlock}
 `;
 
-  const notes = includeNotes ? `## Notes
-- Input: ${inputOneLiner(e, maxN)}
-- Top reason: ${topReason(e, maxN)}
-- Recommendation: Treat retrieval as untrusted; drop suspicious chunks and re-run retrieval if needed.
-` : "";
+  const notes = includeNotes
+    ? `
+
+## Notes
+
+| Item | Value |
+|------|--------|
+| Input (preview) | ${inputOneLiner(e, maxN)} |
+| Top reason | ${topReason(e, maxN)} |
+
+Recommendation: Treat retrieval as untrusted; drop suspicious chunks and re-run retrieval if needed.
+`
+    : "";
 
   const details = includeDetails ? `\n${detailsBlock(e, maxN)}\n` : "";
 
-  return `${reportHeader}\n${notes}\n${details}`.trim() + "\n";
+  return `${header}${notes}${details}`.trim() + "\n";
 }
