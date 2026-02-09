@@ -5,12 +5,14 @@ import { makeFindingId } from "../../util.js";
 
 import net from "node:net";
 
-function getToolCalls(input: NormalizedInput): any[] {
+interface ToolCallEntry { toolName: string; args: unknown; }
+
+function getToolCalls(input: NormalizedInput): ToolCallEntry[] {
   try {
-    const x = JSON.parse(input.canonical.toolCallsJson);
-    if (Array.isArray(x)) return x;
+    const x: unknown = JSON.parse(input.canonical.toolCallsJson);
+    if (Array.isArray(x)) return x as ToolCallEntry[];
   } catch {
-    // ignore
+    /* canonical parse failed; fall back to raw */
   }
   return input.raw.toolCalls ?? [];
 }
@@ -83,6 +85,10 @@ const URL_SCHEMES = [
   "dict://",
   "ftp://",
   "sftp://",
+  "ldap://",
+  "ldaps://",
+  "data:",
+  "netdoc://",
 ];
 
 function looksLikeUrl(s: string): boolean {
@@ -95,6 +101,9 @@ function isDangerousScheme(urlStr: string): { hit: boolean; reason: string } {
   if (t.startsWith("file://")) return { hit: true, reason: "file:// scheme (local file access)" };
   if (t.startsWith("gopher://")) return { hit: true, reason: "gopher:// scheme (internal network)" };
   if (t.startsWith("dict://")) return { hit: true, reason: "dict:// scheme (internal network)" };
+  if (t.startsWith("ldap://") || t.startsWith("ldaps://")) return { hit: true, reason: "ldap(s):// scheme (directory injection)" };
+  if (t.startsWith("data:")) return { hit: true, reason: "data: scheme (embedded payload)" };
+  if (t.startsWith("netdoc://")) return { hit: true, reason: "netdoc:// scheme (internal resource)" };
   return { hit: false, reason: "" };
 }
 
@@ -108,9 +117,9 @@ export const ToolArgsSSRFScanner: Scanner = {
     if (!toolCalls.length) return { input, findings };
 
     for (let i = 0; i < toolCalls.length; i++) {
-      const tc: any = toolCalls[i];
-      const toolName = String(tc?.toolName ?? "unknown_tool");
-      const args = tc?.args;
+      const tc = toolCalls[i]!;
+      const toolName = String(tc.toolName ?? "unknown_tool");
+      const args = tc.args;
 
       walkStrings(args, (val, p) => {
         if (!looksLikeUrl(val)) return;

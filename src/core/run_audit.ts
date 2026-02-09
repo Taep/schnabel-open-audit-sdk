@@ -69,9 +69,10 @@ export interface AuditResult {
 }
 
 function tryCloseScanners(scanners: Scanner[]) {
-  for (const s of scanners as any[]) {
-    if (s && typeof s.close === "function") {
-      try { s.close(); } catch {}
+  for (const s of scanners) {
+    const closable = s as Scanner & Partial<{ close(): void }>;
+    if (closable.close) {
+      try { closable.close(); } catch { /* scanner cleanup is best-effort */ }
     }
   }
 }
@@ -110,7 +111,12 @@ export async function runAudit(req: AuditRequest, opts: AuditRunOptions): Promis
   // --- Escalations (immediate + history-based) ---
   if (opts.history) {
     const w = opts.history.window ?? 20;
-    const recent = await opts.history.store.getRecent(opts.history.sessionId, w);
+    let recent: HistoryTurnV0[] = [];
+    try {
+      recent = await opts.history.store.getRecent(opts.history.sessionId, w);
+    } catch {
+      /* history store unavailable; continue without escalation history */
+    }
 
     decision = applyPolicyEscalations({
       base: decision,
@@ -195,8 +201,8 @@ export async function runAudit(req: AuditRequest, opts: AuditRunOptions): Promis
 
     const detectFindings = (findings ?? []).filter(f => f.kind === "detect");
 
-    const ruleIds = uniqueStrings(detectFindings.map(f => (f.evidence as any)?.ruleId));
-    const categories = uniqueStrings(detectFindings.map(f => (f.evidence as any)?.category));
+    const ruleIds = uniqueStrings(detectFindings.map(f => f.evidence?.["ruleId"]));
+    const categories = uniqueStrings(detectFindings.map(f => f.evidence?.["category"]));
 
     const detectScanners = uniqueStrings(detectFindings.map(f => f.scanner));
     const detectTags = uniqueStrings(detectFindings.flatMap(f => f.tags ?? []));
@@ -215,7 +221,11 @@ export async function runAudit(req: AuditRequest, opts: AuditRunOptions): Promis
       detectTags,
     };
 
-    await opts.history.store.append(opts.history.sessionId, turn);
+    try {
+      await opts.history.store.append(opts.history.sessionId, turn);
+    } catch {
+      /* history store append failed; audit result is still valid */
+    }
   }
 
   if (opts.autoCloseScanners) {

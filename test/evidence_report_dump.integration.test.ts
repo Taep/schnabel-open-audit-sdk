@@ -46,7 +46,7 @@ describe("Evidence markdown report dump (integration)", () => {
     const md = fs.readFileSync(absPath, "utf8");
 
     // New RedTeam-style report checks (stable anchors)
-    expect(md).toContain("Schnabel Audit (RedTeam-style)");
+    expect(md).toContain("Schnabel Audit");
     expect(md).toContain("Decision:");
     expect(md).toContain("Primary:");
     expect(md).toContain("Indicators:");

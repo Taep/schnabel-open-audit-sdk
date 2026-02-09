@@ -3,12 +3,14 @@ import type { Finding } from "../../types.js";
 import type { NormalizedInput } from "../../../normalizer/types.js";
 import { makeFindingId } from "../../util.js";
 
-function getToolCalls(input: NormalizedInput): any[] {
+interface ToolCallEntry { toolName: string; args: unknown; }
+
+function getToolCalls(input: NormalizedInput): ToolCallEntry[] {
   try {
-    const x = JSON.parse(input.canonical.toolCallsJson);
-    if (Array.isArray(x)) return x;
+    const x: unknown = JSON.parse(input.canonical.toolCallsJson);
+    if (Array.isArray(x)) return x as ToolCallEntry[];
   } catch {
-    // ignore
+    /* canonical parse failed; fall back to raw */
   }
   return input.raw.toolCalls ?? [];
 }
@@ -40,11 +42,18 @@ function looksLikePath(s: string): boolean {
 }
 
 function hasTraversal(s: string): boolean {
-  const t = s.toLowerCase();
+  // Double URL-decode to catch encoded variants like %252e%252e
+  let decoded = s;
+  try { decoded = decodeURIComponent(decoded); } catch { /* not encoded */ }
+  try { decoded = decodeURIComponent(decoded); } catch { /* not double-encoded */ }
+
+  // Normalize backslash → forward slash for Windows path support
+  const normalized = decoded.replace(/\\/g, "/").toLowerCase();
+
   return (
-    /(^|[\\/])\.\.([\\/]|$)/.test(t) ||
-    /%2e%2e/i.test(t) ||
-    /%2f|%5c/i.test(t)
+    /(^|\/)\.\.(\/|$)/.test(normalized) ||
+    /%2e%2e/i.test(s) ||
+    /%2f|%5c/i.test(s)
   );
 }
 
@@ -71,9 +80,9 @@ export const ToolArgsPathTraversalScanner: Scanner = {
     if (!toolCalls.length) return { input, findings };
 
     for (let i = 0; i < toolCalls.length; i++) {
-      const tc: any = toolCalls[i];
-      const toolName = String(tc?.toolName ?? "unknown_tool");
-      const args = tc?.args;
+      const tc = toolCalls[i]!;
+      const toolName = String(tc.toolName ?? "unknown_tool");
+      const args = tc.args;
 
       walkStrings(args, (val, p) => {
         if (!looksLikePath(val)) return;

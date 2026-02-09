@@ -73,6 +73,12 @@ function perfGuardRegex(ruleId: string, pattern: string, label: "pattern" | "neg
   if (/\([^)]*[*+][^)]*\)\s*[*+]/.test(pattern)) {
     throw new Error(`RulePack: potential nested quantifier (ReDoS risk) for ${label} in rule: ${ruleId}`);
   }
+
+  // Disallow greedy .\s+.* which can cause catastrophic backtracking.
+  // Non-greedy [\s\S]*? or .+? are accepted.
+  if (/\\s[+*]\.(\*|\+)(?!\?)/.test(pattern)) {
+    throw new Error(`RulePack: greedy \\s+.* pattern (ReDoS risk) for ${label} in rule: ${ruleId}. Use non-greedy .*? instead.`);
+  }
 }
 
 const DEFAULT_SCOPES: RuleScope[] = ["prompt", "chunks"];

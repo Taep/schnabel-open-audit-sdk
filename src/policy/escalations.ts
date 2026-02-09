@@ -13,7 +13,7 @@ function cloneDecision(d: PolicyDecision): PolicyDecision {
     ...d,
     reasons: [...(d.reasons ?? [])],
     findingIds: [...(d.findingIds ?? [])],
-    stats: { ...(d.stats as any) },
+    stats: { ...d.stats },
   };
 }
 

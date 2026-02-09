@@ -1,6 +1,6 @@
 import type { NormalizedInput } from "../normalizer/types.js";
 import type { Finding } from "./types.js";
-import type { Scanner, ScannerContext } from "./scanners/scanner.js";
+import type { Scanner, ScannerContext, ScannerOutput } from "./scanners/scanner.js";
 import { ensureViews } from "./views.js";
 
 export interface ScanOptions {
@@ -12,6 +12,13 @@ export interface ScanOptions {
    * Default: "high"
    */
   failFastRisk?: "high" | "critical";
+
+  /**
+   * Per-scanner execution timeout in milliseconds.
+   * If a scanner exceeds this limit, it is aborted and an error is thrown.
+   * Default: 30 000 (30 s)
+   */
+  scannerTimeoutMs?: number;
 }
 
 function isFailFastHit(
@@ -50,8 +57,10 @@ export async function scanSignals(
   // Working input that can be updated by sanitizers/enrichers
   let current = ensureViews(input);
 
+  const timeoutMs = options.scannerTimeoutMs ?? 30_000;
+
   for (let i = 0; i < scanners.length; i++) {
-    const scanner: any = scanners[i];
+    const scanner = scanners[i];
 
     // Defensive validation (helps debug wrong imports/exports)
     if (!scanner || typeof scanner.run !== "function") {
@@ -62,7 +71,15 @@ export async function scanSignals(
       );
     }
 
-    const out: any = await scanner.run(current, ctx);
+    const out: ScannerOutput = await Promise.race([
+      scanner.run(current, ctx),
+      new Promise<never>((_, reject) =>
+        setTimeout(
+          () => reject(new Error(`scanSignals: scanner "${scanner.name}" timed out after ${timeoutMs}ms`)),
+          timeoutMs,
+        ),
+      ),
+    ]);
 
     if (!out || !out.input || !Array.isArray(out.findings)) {
       throw new Error(

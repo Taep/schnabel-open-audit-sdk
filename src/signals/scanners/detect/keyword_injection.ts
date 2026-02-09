@@ -1,6 +1,6 @@
 import type { Scanner } from "../scanner.js";
 import type { Finding, RiskLevel } from "../../types.js";
-import type { NormalizedInput, TextView } from "../../../normalizer/types.js";
+import type { NormalizedInput, TextView, TextViewSet } from "../../../normalizer/types.js";
 import { makeFindingId } from "../../util.js";
 import { ensureViews, VIEW_SCAN_ORDER, pickPreferredView } from "../../views.js";
 
@@ -32,10 +32,10 @@ const PATTERNS: PatternSpec[] = [
   },
 ];
 
-function matchViews(re: RegExp, viewMap: Record<string, string>): TextView[] {
+function matchViews(re: RegExp, viewMap: TextViewSet): TextView[] {
   const matched: TextView[] = [];
   for (const v of VIEW_SCAN_ORDER) {
-    const text = (viewMap as any)[v] ?? "";
+    const text = viewMap[v as keyof typeof viewMap] ?? "";
     if (re.test(text)) matched.push(v);
   }
   return matched;
@@ -57,7 +57,7 @@ export const KeywordInjectionScanner: Scanner = {
 
     // 1) Prompt
     for (const p of PATTERNS) {
-      const matchedViews = matchViews(p.re, views.prompt as any);
+      const matchedViews = matchViews(p.re, views.prompt);
       if (!matchedViews.length) continue;
 
       const view = pickPreferredView(matchedViews);
@@ -82,7 +82,7 @@ export const KeywordInjectionScanner: Scanner = {
     for (let i = 0; i < chunks.length; i++) {
       const ch = chunks[i];
       if (!ch) continue;
-      const viewMap = ch.views as unknown as Record<string, string>;
+      const viewMap = ch.views;
 
       for (const p of PATTERNS) {
         const matchedViews = matchViews(p.re, viewMap);

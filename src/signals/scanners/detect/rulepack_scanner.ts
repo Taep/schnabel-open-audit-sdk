@@ -70,7 +70,7 @@ export function createRulePackScanner(opts: RulePackScannerOptions = {}): Scanne
       try {
         const st = fs.statSync(packPath);
         if (st.mtimeMs > packMtimeMs) reload();
-      } catch {}
+      } catch { /* mtime check failed; will retry on next scan */ }
     }
 
     return pack!;
@@ -118,7 +118,7 @@ export function createRulePackScanner(opts: RulePackScannerOptions = {}): Scanne
     const details: Record<string, MatchDetail> = {};
 
     for (const v of VIEW_SCAN_ORDER) {
-      const t = (viewMap as any)[v] ?? "";
+      const t = viewMap[v as keyof typeof viewMap] ?? "";
       const res = matchInText(rule, t);
       if (res.hit && typeof res.index === "number") {
         matchedViews.push(v);
@@ -151,7 +151,8 @@ export function createRulePackScanner(opts: RulePackScannerOptions = {}): Scanne
         if (!hit) continue;
 
         const view = hit.preferred;
-        const text = (base.views!.prompt as any)[view] ?? "";
+        const promptViews = base.views!.prompt;
+        const text = promptViews[view as keyof typeof promptViews] ?? "";
         const idx = hit.detail?.index ?? -1;
 
         findings.push({
