@@ -1,5 +1,5 @@
 import type { AuditRequest, NormalizedInput } from "../normalizer/types.js";
-import type { Finding } from "../signals/types.js";
+import type { Finding, ScannerMetric } from "../signals/types.js";
 import type { Scanner } from "../signals/scanners/scanner.js";
 import type { ScanOptions } from "../signals/scan.js";
 import type { PolicyConfig, PolicyDecision } from "../policy/evaluate.js";
@@ -39,6 +39,9 @@ export interface AuditRunOptions {
   };
 
   autoCloseScanners?: boolean;
+
+  /** Called after each scanner completes. Useful for logging/metrics export. */
+  onScannerDone?: ScanOptions["onScannerDone"];
 }
 
 export interface AuditResult {
@@ -66,6 +69,8 @@ export interface AuditResult {
   sessionSummaryPath?: string | undefined;
 
   dumpDecision?: DumpDecision | undefined;
+
+  metrics?: ScannerMetric[] | undefined;
 }
 
 function tryCloseScanners(scanners: Scanner[]) {
@@ -99,10 +104,14 @@ export async function runAudit(req: AuditRequest, opts: AuditRunOptions): Promis
   const normalized = normalize(reqEffective);
 
   // L2
-  const { input: scanned, findings } = await scanSignals(
+  const scanOpts: ScanOptions = {
+    ...(opts.scanOptions ?? { mode: "audit", failFast: false }),
+    ...(opts.onScannerDone ? { onScannerDone: opts.onScannerDone } : {}),
+  };
+  const { input: scanned, findings, metrics } = await scanSignals(
     normalized,
     opts.scanners,
-    opts.scanOptions ?? { mode: "audit", failFast: false }
+    scanOpts,
   );
 
   // L3 base
@@ -247,5 +256,6 @@ export async function runAudit(req: AuditRequest, opts: AuditRunOptions): Promis
     turnDir,
     sessionSummaryPath,
     dumpDecision,
+    metrics,
   };
 }

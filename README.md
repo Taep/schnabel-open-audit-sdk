@@ -24,6 +24,7 @@ Evidence-first • Provenance-aware • Obfuscation-resistant
 - [Integration points: Pre-LLM, Tool-boundary, Post-LLM](#integration-points-when-to-run-which-chain)
 - [Response Audit (LLM output scanning)](#response-audit-llm-output-scanning)
 - [Writing custom scanners](#writing-custom-scanners)
+- [Metrics & Observability](#metrics--observability)
 - [Example: Usage with CloudBot](#example-usage-with-cloudbot)
 - [Example: Anthropic computer-use-demo (official Git source)](#example-anthropic-computer-use-demo-official-git-source)
 - [Usage and integration](#usage-and-integration)
@@ -373,6 +374,83 @@ export function createMyScanner(options: { threshold: number }): Scanner {
 | `VIEW_SCAN_ORDER` | `["raw", "sanitized", "revealed", "skeleton"]` — order for scanning |
 | `pickPreferredView(matchedViews)` | Pick the best view from matches for human-readable output |
 | `initViewSet(text)` | Create a `TextViewSet` from a string (for sanitizer/enricher authors) |
+
+### Metrics & Observability
+
+`scanSignals()` and `runAudit()` return per-scanner timing and finding-count metrics. This enables performance monitoring, bottleneck identification, and integration with observability platforms (OpenTelemetry, Datadog, etc.) without any SDK modification.
+
+**Returned metrics:**
+
+```typescript
+import type { ScannerMetric } from "schnabel-open-audit-sdk";
+
+// ScannerMetric {
+//   scanner: string;       — scanner name
+//   kind: ScannerKind;     — "sanitize" | "enrich" | "detect"
+//   durationMs: number;    — execution time (ms, via performance.now())
+//   findingCount: number;  — findings produced by this scanner
+//   error?: string;        — error message if the scanner failed
+// }
+```
+
+**Basic usage — read metrics from result:**
+
+```typescript
+const { findings, metrics } = await scanSignals(normalized, scanners, {
+  mode: "audit",
+});
+
+for (const m of metrics) {
+  console.log(`${m.scanner} (${m.kind}): ${m.durationMs.toFixed(1)}ms, ${m.findingCount} findings`);
+}
+```
+
+**Real-time callback — `onScannerDone`:**
+
+```typescript
+const { findings, metrics } = await scanSignals(normalized, scanners, {
+  mode: "audit",
+  onScannerDone(metric) {
+    // Fires after each scanner completes — use for streaming metrics
+    myLogger.info("scanner_done", metric);
+  },
+});
+```
+
+**OpenTelemetry integration example:**
+
+```typescript
+import { trace } from "@opentelemetry/api";
+
+const tracer = trace.getTracer("schnabel-audit");
+
+const result = await runAudit(req, {
+  scanners,
+  onScannerDone(metric) {
+    const span = tracer.startSpan(`scanner:${metric.scanner}`);
+    span.setAttribute("scanner.kind", metric.kind);
+    span.setAttribute("scanner.duration_ms", metric.durationMs);
+    span.setAttribute("scanner.finding_count", metric.findingCount);
+    span.end();
+  },
+});
+
+// result.metrics also available for batch export
+```
+
+**Via `runAudit`:**
+
+`runAudit()` passes metrics through to `AuditResult.metrics` and accepts `onScannerDone` in `AuditRunOptions`:
+
+```typescript
+const result = await runAudit(req, {
+  scanners,
+  scanOptions: { mode: "audit" },
+  onScannerDone(m) { console.log(m.scanner, m.durationMs); },
+});
+
+console.log("Total scanners:", result.metrics?.length);
+```
 
 ### Example: Usage with CloudBot
 

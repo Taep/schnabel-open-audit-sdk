@@ -1,5 +1,5 @@
 import type { NormalizedInput } from "../normalizer/types.js";
-import type { Finding } from "./types.js";
+import type { Finding, ScannerMetric } from "./types.js";
 import type { Scanner, ScannerContext, ScannerOutput } from "./scanners/scanner.js";
 import { ensureViews } from "./views.js";
 
@@ -19,6 +19,9 @@ export interface ScanOptions {
    * Default: 30 000 (30 s)
    */
   scannerTimeoutMs?: number;
+
+  /** Called after each scanner completes. Useful for logging/metrics export (e.g. OpenTelemetry). */
+  onScannerDone?: (metric: ScannerMetric) => void;
 }
 
 function isFailFastHit(
@@ -44,15 +47,17 @@ export async function scanSignals(
   input: NormalizedInput,
   scanners: Scanner[],
   options: ScanOptions = {}
-): Promise<{ input: NormalizedInput; findings: Finding[] }> {
+): Promise<{ input: NormalizedInput; findings: Finding[]; metrics: ScannerMetric[] }> {
   const ctx: ScannerContext = {
     mode: options.mode ?? "runtime",
     nowMs: Date.now(),
   };
 
   const findings: Finding[] = [];
+  const metrics: ScannerMetric[] = [];
   const failFast = options.failFast ?? false;
   const failFastRisk = options.failFastRisk ?? "high";
+  const onScannerDone = options.onScannerDone;
 
   // Working input that can be updated by sanitizers/enrichers
   let current = ensureViews(input);
@@ -71,6 +76,8 @@ export async function scanSignals(
       );
     }
 
+    const startMs = performance.now();
+
     const out: ScannerOutput = await Promise.race([
       scanner.run(current, ctx),
       new Promise<never>((_, reject) =>
@@ -80,6 +87,8 @@ export async function scanSignals(
         ),
       ),
     ]);
+
+    const durationMs = performance.now() - startMs;
 
     if (!out || !out.input || !Array.isArray(out.findings)) {
       throw new Error(
@@ -94,10 +103,19 @@ export async function scanSignals(
 
     if (out.findings.length) findings.push(...out.findings);
 
+    const metric: ScannerMetric = {
+      scanner: scanner.name,
+      kind: scanner.kind,
+      durationMs,
+      findingCount: out.findings.length,
+    };
+    metrics.push(metric);
+    onScannerDone?.(metric);
+
     if (failFast && out.findings.some((f: Finding) => isFailFastHit(f.risk, failFastRisk))) {
       break;
     }
   }
 
-  return { input: current, findings };
+  return { input: current, findings, metrics };
 }
