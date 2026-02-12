@@ -86,3 +86,24 @@ export {
 // --- History store (multiturn) ---
 export { InMemoryHistoryStore } from "./core/history_store.js";
 export type { HistoryStore, HistoryTurnV0 } from "./core/history_store.js";
+
+// --- Inno Platform integration (SUI blockchain) ---
+export { InnoConnect, InnoConnectError } from "./inno/inno_connect.js";
+export type {
+  InnoConnectConfig,
+  MultisigParticipant,
+  MultisigWalletResponse,
+  InnoSubmitResponse,
+  InnoAuditMeta,
+} from "./inno/types.js";
+export { InnoAuditSession, createInnoAuditSession } from "./inno/run_audit_inno.js";
+export type { InnoAuditSessionConfig, InnoSessionResult } from "./inno/run_audit_inno.js";
+export {
+  getSuiExplorerTxUrl,
+  getSuiExplorerAccountUrl,
+  getSuiExplorerUrl,
+  openSuiExplorer,
+  openSuiExplorerAccount,
+  openInBrowser,
+} from "./inno/explorer.js";
+export type { SuiNetwork } from "./inno/explorer.js";

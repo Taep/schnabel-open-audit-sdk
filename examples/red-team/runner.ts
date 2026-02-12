@@ -21,12 +21,18 @@ import { SeparatorCollapseScanner } from "../../src/signals/scanners/sanitize/se
 import { Uts39SkeletonViewScanner } from "../../src/signals/scanners/enrich/uts39_skeleton_view.js";
 import { createRulePackScanner } from "../../src/signals/scanners/detect/rulepack_scanner.js";
 
+// Inno Platform integration
+import { createInnoAuditSession } from "../../src/inno/run_audit_inno.js";
+import type { InnoSessionResult } from "../../src/inno/run_audit_inno.js";
+import type { InnoConnectConfig } from "../../src/inno/types.js";
+
 // ANSI colors
 const c = {
   red: (s: string) => `\x1b[31m${s}\x1b[0m`,
   green: (s: string) => `\x1b[32m${s}\x1b[0m`,
   yellow: (s: string) => `\x1b[33m${s}\x1b[0m`,
   blue: (s: string) => `\x1b[34m${s}\x1b[0m`,
+  cyan: (s: string) => `\x1b[36m${s}\x1b[0m`,
   gray: (s: string) => `\x1b[90m${s}\x1b[0m`,
 };
 
@@ -95,6 +101,19 @@ function runTimestamp(): string {
   return `${y}${M}${D}-${h}${m}${s}`;
 }
 
+/**
+ * Read Inno Platform config from environment variables.
+ * Returns undefined if INNO_API_BASE_URL is not set (Inno integration disabled).
+ */
+function getInnoConfig(): InnoConnectConfig | undefined {
+  const baseUrl = process.env["INNO_API_BASE_URL"];
+  if (!baseUrl) return undefined;
+  return {
+    baseUrl,
+    apiKey: process.env["INNO_API_KEY"],
+  };
+}
+
 async function runRedTeam() {
   const scenariosDir = path.resolve("examples/red-team/scenarios.d");
   const redTeamOutDir = path.resolve("examples/red-team/out");
@@ -124,6 +143,35 @@ async function runRedTeam() {
     rulepack,
   ];
 
+  // ---------------------------------------------------------------------------
+  // Inno Platform session (optional — enabled when INNO_API_BASE_URL is set)
+  // ---------------------------------------------------------------------------
+  const innoConfig = getInnoConfig();
+  const innoSession = innoConfig
+    ? createInnoAuditSession({
+        inno: innoConfig,
+        auditDefaults: { scanners, scanOptions: { mode: "audit", failFast: false } },
+        network: (process.env["SUI_NETWORK"] as "mainnet" | "testnet" | "devnet") ?? "mainnet",
+        openExplorerOnWalletCreated: true,
+        onWalletCreated: (wallet) => {
+          console.log(c.cyan(`\n🔑 Multisig wallet created`));
+          console.log(c.cyan(`   Address:   ${wallet.multisigAddress}`));
+          console.log(c.cyan(`   KeyShare:  ${wallet.userKeyShare.slice(0, 8)}...`));
+          console.log(c.cyan(`   Threshold: ${wallet.threshold} / ${wallet.participants.length} participants\n`));
+        },
+      })
+    : null;
+
+  if (innoSession) {
+    console.log(c.cyan(`🔗 Inno Platform: ${innoConfig!.baseUrl}`));
+    await innoSession.start();
+  } else {
+    console.log(c.gray("ℹ️  Inno Platform: disabled (set INNO_API_BASE_URL to enable)\n"));
+  }
+
+  // ---------------------------------------------------------------------------
+  // Run scenarios
+  // ---------------------------------------------------------------------------
   let passed = 0;
   let failed = 0;
   const missed: MissedScenario[] = [];
@@ -149,10 +197,10 @@ async function runRedTeam() {
     console.log(c.gray(`   Source=${s.source}, Encoding=${encoding}`));
 
     try {
-      const result = await runAudit(req, {
-        scanners,
-        scanOptions: { mode: "audit", failFast: false },
-      });
+      // Use InnoAuditSession.audit() if available, otherwise fallback to runAudit()
+      const result = innoSession
+        ? await innoSession.audit(req)
+        : await runAudit(req, { scanners, scanOptions: { mode: "audit", failFast: false } });
 
       const detectFindings = result.findings.filter(f => f.kind === "detect");
       const hasDetect = detectFindings.length > 0;
@@ -207,6 +255,27 @@ async function runRedTeam() {
     console.log(c.gray("--------------------------------------------------"));
   }
 
+  // ---------------------------------------------------------------------------
+  // Inno Platform: finish session → submit results to SUI/Walrus
+  // ---------------------------------------------------------------------------
+  let innoResult: InnoSessionResult | undefined;
+  if (innoSession) {
+    console.log(c.cyan(`\n🔗 Finishing Inno session (${innoSession.auditCount} audits)...`));
+    innoResult = await innoSession.finish({ openExplorer: true });
+
+    if (innoResult.inno?.submission) {
+      console.log(c.cyan(`   TX Digest:  ${innoResult.inno.submission.txDigest}`));
+      console.log(c.cyan(`   Walrus:     ${innoResult.inno.submission.walrusBlobId ?? "N/A"}`));
+      console.log(c.cyan(`   Wallet:     ${innoResult.inno.walletExplorerUrl}`));
+      console.log(c.cyan(`   TX:         ${innoResult.inno.txExplorerUrl}`));
+    } else {
+      console.log(c.yellow("   ⚠️  Inno submission failed or skipped (audit results still saved locally)"));
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // Local evidence & report output (always written regardless of Inno)
+  // ---------------------------------------------------------------------------
   const byAction: Record<string, number> = { allow: 0, allow_with_warning: 0, challenge: 0, block: 0 };
   const byRisk: Record<string, number> = { none: 0, low: 0, medium: 0, high: 0, critical: 0 };
   let crashCount = 0;
@@ -229,6 +298,17 @@ async function runRedTeam() {
     runId: ts,
     runAt: new Date().toISOString(),
     summary: { total: scenarios.length, passed, failed, crashed: crashCount },
+    // Inno/SUI metadata (if available)
+    ...(innoResult?.inno ? {
+      sui: {
+        walletAddress: innoResult.inno.wallet.multisigAddress,
+        walletExplorerUrl: innoResult.inno.walletExplorerUrl,
+        txDigest: innoResult.inno.submission?.txDigest,
+        txExplorerUrl: innoResult.inno.txExplorerUrl,
+        walrusBlobId: innoResult.inno.submission?.walrusBlobId,
+        network: innoResult.inno.submission?.network,
+      },
+    } : {}),
     entries: runEntries.map((e) => {
       if (e.error) {
         return { scenarioId: e.scenario.id ?? null, scenarioName: e.scenario.name, encoding: e.encoding, ok: false, error: e.error };
@@ -251,6 +331,32 @@ async function runRedTeam() {
     ``,
     `**Run:** \`${ts}\` · **Time:** ${new Date().toISOString()}`,
     ``,
+  ];
+
+  // Inno/SUI section in report
+  if (innoResult?.inno) {
+    reportParts.push(
+      `## SUI Blockchain Record`,
+      ``,
+      `| Item | Value |`,
+      `|------|-------|`,
+      `| **Wallet** | \`${innoResult.inno.wallet.multisigAddress}\` |`,
+      `| **Wallet Explorer** | [suiscan.xyz](${innoResult.inno.walletExplorerUrl}) |`,
+      ...(innoResult.inno.submission ? [
+        `| **TX Digest** | \`${innoResult.inno.submission.txDigest}\` |`,
+        `| **TX Explorer** | [suiscan.xyz](${innoResult.inno.txExplorerUrl}) |`,
+        `| **Walrus Blob** | \`${innoResult.inno.submission.walrusBlobId ?? "N/A"}\` |`,
+        `| **Network** | ${innoResult.inno.submission.network} |`,
+      ] : [
+        `| **Submission** | ⚠️ Failed or skipped |`,
+      ]),
+      ``,
+      `---`,
+      ``,
+    );
+  }
+
+  reportParts.push(
     `## Summary`,
     ``,
     `| Metric | Count |`,
@@ -283,7 +389,7 @@ async function runRedTeam() {
     ``,
     `## Scenario details`,
     ``,
-  ];
+  );
   for (const entry of runEntries) {
     const { scenario: s, encoding, result, ok, error } = entry;
     const verdict = ok === true ? "✅ PASS" : ok === false && error ? "❌ CRASH" : "❌ FAIL";
