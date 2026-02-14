@@ -49,8 +49,8 @@ export function createRulePackScanner(opts: RulePackScannerOptions = {}): Scanne
       const st = fs.statSync(packPath);
       packMtimeMs = st.mtimeMs;
       log("info", `[${scannerName}] rulepack reloaded`, { version: pack.version });
-    } catch (e: any) {
-      log("error", `[${scannerName}] rulepack reload failed (keeping previous pack)`, { error: String(e?.message ?? e) });
+    } catch (e) {
+      log("error", `[${scannerName}] rulepack reload failed (keeping previous pack)`, { error: e instanceof Error ? e.message : String(e) });
     }
   };
 
@@ -80,8 +80,8 @@ export function createRulePackScanner(opts: RulePackScannerOptions = {}): Scanne
     try {
       watcher = fs.watch(packPath, { persistent: false }, () => scheduleReload());
       log("info", `[${scannerName}] hot reload enabled`, { path: packPath });
-    } catch (e: any) {
-      log("warn", `[${scannerName}] fs.watch failed; relying on mtime reload`, { error: String(e?.message ?? e) });
+    } catch (e) {
+      log("warn", `[${scannerName}] fs.watch failed; relying on mtime reload`, { error: e instanceof Error ? e.message : String(e) });
     }
   }
 

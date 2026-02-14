@@ -375,6 +375,8 @@ export function createMyScanner(options: { threshold: number }): Scanner {
 | `VIEW_SCAN_ORDER` | `["raw", "sanitized", "revealed", "skeleton"]` — order for scanning |
 | `pickPreferredView(matchedViews)` | Pick the best view from matches for human-readable output |
 | `initViewSet(text)` | Create a `TextViewSet` from a string (for sanitizer/enricher authors) |
+| `RISK_ORDER` | `["none", "low", "medium", "high", "critical"]` — canonical risk level ordering |
+| `riskAtOrAbove(a, b)` | Returns `true` if risk level `a` is at or above `b` in severity |
 
 ### Metrics & Observability
 

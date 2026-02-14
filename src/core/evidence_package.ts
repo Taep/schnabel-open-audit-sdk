@@ -94,8 +94,9 @@ function extractRulePackVersions(findings: Finding[]): string[] | undefined {
   const versions = new Set<string>();
 
   for (const f of findings) {
-    const ev: any = f.evidence ?? {};
-    if (typeof ev.rulePackVersion === "string") versions.add(ev.rulePackVersion);
+    const ev = f.evidence ?? {};
+    const ver = ev["rulePackVersion"];
+    if (typeof ver === "string") versions.add(ver);
   }
 
   const arr = Array.from(versions);

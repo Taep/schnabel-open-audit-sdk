@@ -7,6 +7,7 @@
 
 import type { AuditResult } from "./run_audit.js";
 import type { EvidencePackageV0 } from "./evidence_package.js";
+import { RISK_ORDER } from "../signals/types.js";
 
 // ---------------------------------------------------------------------------
 // Public API
@@ -162,7 +163,7 @@ ${CSS}
     const sc = hasScenarios ? scenarios[i] : undefined;
 
     const primary = pickPrimaryDetect(e);
-    const detectCount = (e.findings ?? []).filter((f: any) => f.kind === "detect").length;
+    const detectCount = (e.findings ?? []).filter(f => f.kind === "detect").length;
     const action = e.decision.action;
 
     // Verdict
@@ -198,9 +199,8 @@ ${CSS}
         <tr><td>Decision</td><td><span class="badge badge-${action}">${esc(action)}</span> &middot; risk=${esc(e.decision.risk ?? "none")} &middot; confidence=${e.decision.confidence.toFixed(2)}</td></tr>
         <tr><td>Detect Findings</td><td>${detectCount} / ${(e.findings ?? []).length} total</td></tr>`);
       if (primary) {
-        const mv = Array.isArray((primary.evidence as any)?.matchedViews)
-          ? (primary.evidence as any).matchedViews.join(", ")
-          : "";
+        const mvRaw = primary.evidence?.["matchedViews"];
+        const mv = Array.isArray(mvRaw) ? mvRaw.join(", ") : "";
         parts.push(`<tr><td>Primary</td><td>${esc(primary.scanner)} &middot; risk=${esc(primary.risk)} &middot; view=${esc(primary.target.view)}${mv ? ` &middot; matchedViews=[${esc(mv)}]` : ""}</td></tr>`);
       }
       if (e.decision.reasons?.length) {
@@ -267,12 +267,10 @@ function formatTs(ms: number): string {
   return d.toISOString().replace("T", " ").replace(/\.\d+Z$/, " UTC");
 }
 
-const RISK_ORDER = ["none", "low", "medium", "high", "critical"] as const;
-
 function pickPrimaryDetect(e: EvidencePackageV0) {
-  const detect = (e.findings ?? []).filter((f: any) => f.kind === "detect");
+  const detect = (e.findings ?? []).filter(f => f.kind === "detect");
   if (!detect.length) return null;
-  detect.sort((a: any, b: any) => {
+  detect.sort((a, b) => {
     const ra = RISK_ORDER.indexOf(a.risk);
     const rb = RISK_ORDER.indexOf(b.risk);
     if (rb !== ra) return rb - ra;

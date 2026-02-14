@@ -1,4 +1,4 @@
-import type { Finding, RiskLevel } from "../signals/types.js";
+import { type Finding, type RiskLevel, RISK_ORDER, riskAtOrAbove } from "../signals/types.js";
 
 export type VerdictAction =
   | "allow"
@@ -39,8 +39,6 @@ const DEFAULT_CONFIG: PolicyConfig = {
   maxReasons: 5,
 };
 
-const RISK_ORDER: RiskLevel[] = ["none", "low", "medium", "high", "critical"];
-
 function maxRisk(findings: Finding[]): RiskLevel {
   let maxIdx = 0;
   for (const f of findings) {
@@ -48,10 +46,6 @@ function maxRisk(findings: Finding[]): RiskLevel {
     if (idx > maxIdx) maxIdx = idx;
   }
   return RISK_ORDER[maxIdx] ?? "none";
-}
-
-function riskMeetsOrExceeds(risk: RiskLevel, threshold: RiskLevel): boolean {
-  return RISK_ORDER.indexOf(risk) >= RISK_ORDER.indexOf(threshold);
 }
 
 function buildStats(findings: Finding[]) {
@@ -86,7 +80,7 @@ function defaultConfidence(risk: RiskLevel): number {
     case "high":     return 0.75;
     case "medium":   return 0.6;
     case "low":      return 0.55;
-    case "none":     return 0.7;
+    case "none":     return 0.95;
   }
 }
 
@@ -124,10 +118,13 @@ export function evaluatePolicy(
 
   let action: VerdictAction = "allow";
 
-  if (riskMeetsOrExceeds(risk, cfg.blockAt)) {
+  if (riskAtOrAbove(risk, cfg.blockAt)) {
     action = "block";
-  } else if (riskMeetsOrExceeds(risk, cfg.challengeAt) || stats.scoreSum >= cfg.challengeScoreSumAt) {
+  } else if (riskAtOrAbove(risk, cfg.challengeAt)) {
     action = "challenge";
+  } else if (stats.scoreSum >= cfg.challengeScoreSumAt) {
+    action = "challenge";
+    reasons.unshift(`[POLICY] Cumulative score sum ${stats.scoreSum.toFixed(2)} >= ${cfg.challengeScoreSumAt} threshold. Escalated to CHALLENGE.`);
   } else if (stats.scoreSum >= cfg.warnScoreSumAt) {
     action = "allow_with_warning";
   }

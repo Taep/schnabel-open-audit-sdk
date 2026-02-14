@@ -1,4 +1,4 @@
-import type { RiskLevel, Finding } from "../signals/types.js";
+import { type RiskLevel, type Finding, RISK_ORDER } from "../signals/types.js";
 import type { InputSource, TextView } from "../normalizer/types.js";
 import type { VerdictAction } from "./dump_policy.js";
 
@@ -39,8 +39,6 @@ export interface SessionSummary {
   topCategories: Array<{ category: string; count: number }>;
 }
 
-const RISK_ORDER: RiskLevel[] = ["none", "low", "medium", "high", "critical"];
-
 function initRiskCounts(): Record<RiskLevel, number> {
   return { none: 0, low: 0, medium: 0, high: 0, critical: 0 };
 }
@@ -63,7 +61,7 @@ function countByView(findings: Finding[]): Record<TextView, number> {
   const out = initViewCounts();
   for (const f of findings) {
     out[f.target.view] += 1;
-    const mv = (f.evidence as any)?.matchedViews;
+    const mv = f.evidence?.["matchedViews"];
     if (Array.isArray(mv)) {
       for (const v of mv) {
         if (v in out) out[v as TextView] += 1;
@@ -99,9 +97,11 @@ function extractRuleAndCategoryCounts(findings: Finding[]) {
   const catCounts = new Map<string, number>();
 
   for (const f of findings) {
-    const ev: any = f.evidence ?? {};
-    if (typeof ev.ruleId === "string") ruleCounts.set(ev.ruleId, (ruleCounts.get(ev.ruleId) ?? 0) + 1);
-    if (typeof ev.category === "string") catCounts.set(ev.category, (catCounts.get(ev.category) ?? 0) + 1);
+    const ev = f.evidence ?? {};
+    const ruleId = ev["ruleId"];
+    const category = ev["category"];
+    if (typeof ruleId === "string") ruleCounts.set(ruleId, (ruleCounts.get(ruleId) ?? 0) + 1);
+    if (typeof category === "string") catCounts.set(category, (catCounts.get(category) ?? 0) + 1);
   }
 
   return { ruleCounts, catCounts };

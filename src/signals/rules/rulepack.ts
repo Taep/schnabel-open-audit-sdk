@@ -166,8 +166,8 @@ function compileRule(rule: RuleSpec): CompiledRule {
 
     try {
       compiled._re = new RegExp(rule.pattern, flags);
-    } catch (e: any) {
-      throw new Error(`RulePack: regex compile failed for ${rule.id}: ${String(e?.message ?? e)}`);
+    } catch (e) {
+      throw new Error(`RulePack: regex compile failed for ${rule.id}: ${e instanceof Error ? e.message : String(e)}`);
     }
   } else {
     // keyword
@@ -182,8 +182,8 @@ function compileRule(rule: RuleSpec): CompiledRule {
 
     try {
       compiled._negRe = new RegExp(rule.negativePattern, negFlags);
-    } catch (e: any) {
-      throw new Error(`RulePack: negative regex compile failed for ${rule.id}: ${String(e?.message ?? e)}`);
+    } catch (e) {
+      throw new Error(`RulePack: negative regex compile failed for ${rule.id}: ${e instanceof Error ? e.message : String(e)}`);
     }
   }
 
@@ -250,12 +250,12 @@ export function loadRulePackFromUrl(url: URL, opts?: { forceReload?: boolean }):
   }
 
   const raw = fs.readFileSync(path, "utf8");
-  let obj: any;
+  let obj: unknown;
 
   try {
     obj = JSON.parse(raw);
-  } catch (e: any) {
-    throw new Error(`RulePack: JSON parse failed: ${path}: ${String(e?.message ?? e)}`);
+  } catch (e) {
+    throw new Error(`RulePack: JSON parse failed: ${path}: ${e instanceof Error ? e.message : String(e)}`);
   }
 
   const compiled = compilePack(obj as RulePack);

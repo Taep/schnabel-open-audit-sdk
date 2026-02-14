@@ -3,7 +3,7 @@ import fsp from "node:fs/promises";
 import path from "node:path";
 
 import type { EvidencePackageV0 } from "./evidence_package.js";
-import type { RiskLevel } from "../signals/types.js";
+import { type RiskLevel, type Finding, RISK_ORDER } from "../signals/types.js";
 import type { TextView } from "../normalizer/types.js";
 
 import { saveEvidencePackage } from "./evidence_dump.js";
@@ -46,8 +46,6 @@ export interface SessionStateV0 {
   }>;
 }
 
-const RISK_ORDER: RiskLevel[] = ["none", "low", "medium", "high", "critical"];
-
 function safeName(s: string): string {
   return s.replace(/[^a-zA-Z0-9._-]/g, "_");
 }
@@ -60,11 +58,11 @@ function initViewCounts(): Record<TextView, number> {
   return { raw: 0, sanitized: 0, revealed: 0, skeleton: 0 };
 }
 
-function countViewsForFinding(f: any): Set<TextView> {
+function countViewsForFinding(f: Finding): Set<TextView> {
   const out = new Set<TextView>();
-  if (f.target?.view) out.add(f.target.view);
-  const mv = f.evidence?.matchedViews;
-  if (Array.isArray(mv)) for (const v of mv) if (v in initViewCounts()) out.add(v);
+  out.add(f.target.view);
+  const mv = f.evidence?.["matchedViews"];
+  if (Array.isArray(mv)) for (const v of mv) if (typeof v === "string" && v in initViewCounts()) out.add(v as TextView);
   return out;
 }
 
@@ -179,20 +177,20 @@ export async function dumpEvidenceToSessionLayout(
     const findings = evidence.findings ?? [];
     state.findingsTotal += findings.length;
 
-    for (const f of findings as any[]) {
+    for (const f of findings) {
       // views
       for (const v of countViewsForFinding(f)) state.findingsByView[v] += 1;
 
       // source
-      if (f.target?.field === "prompt") state.findingsBySource.prompt = (state.findingsBySource.prompt ?? 0) + 1;
+      if (f.target.field === "prompt") state.findingsBySource.prompt = (state.findingsBySource.prompt ?? 0) + 1;
       else {
-        const s = f.target?.source ?? "unknown";
+        const s = f.target.source ?? "unknown";
         state.findingsBySource[s] = (state.findingsBySource[s] ?? 0) + 1;
       }
 
       // rule/category
-      const ruleId = f.evidence?.ruleId;
-      const cat = f.evidence?.category;
+      const ruleId = f.evidence?.["ruleId"];
+      const cat = f.evidence?.["category"];
       if (typeof ruleId === "string") state.ruleCounts[ruleId] = (state.ruleCounts[ruleId] ?? 0) + 1;
       if (typeof cat === "string") state.categoryCounts[cat] = (state.categoryCounts[cat] ?? 0) + 1;
     }

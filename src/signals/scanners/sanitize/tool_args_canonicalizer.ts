@@ -100,10 +100,10 @@ function sanitizeDeep(x: unknown): { value: unknown; agg: Agg } {
   return { value: x, agg: emptyAgg() };
 }
 
-function parseToolCallsJson(jsonText: string): any[] {
+function parseToolCallsJson(jsonText: string): Record<string, unknown>[] {
   try {
-    const x = JSON.parse(jsonText);
-    return Array.isArray(x) ? x : [];
+    const x: unknown = JSON.parse(jsonText);
+    return Array.isArray(x) ? x as Record<string, unknown>[] : [];
   } catch {
     return [];
   }
@@ -124,8 +124,8 @@ export const ToolArgsCanonicalizerScanner: Scanner = {
     let total = emptyAgg();
     let anyToolArgsChanged = false;
 
-    const outCalls = toolCalls.map((tc: any) => {
-      const r = sanitizeDeep(tc?.args);
+    const outCalls = toolCalls.map((tc) => {
+      const r = sanitizeDeep(tc["args"]);
       total = mergeAgg(total, r.agg);
 
       if (r.agg.changed) {

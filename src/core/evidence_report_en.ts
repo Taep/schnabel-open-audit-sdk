@@ -1,15 +1,12 @@
 import type { EvidencePackageV0 } from "./evidence_package.js";
-
-type RiskLevel = "none" | "low" | "medium" | "high" | "critical";
-type VerdictAction = "allow" | "allow_with_warning" | "challenge" | "block";
+import { type Finding, type RiskLevel, RISK_ORDER } from "../signals/types.js";
+import type { VerdictAction } from "../policy/evaluate.js";
 
 export interface ReportOptions {
   maxPreviewChars?: number;        // default 120
   includeNotes?: boolean;          // default true
   includeDetails?: boolean;        // default false
 }
-
-const RISK_ORDER: RiskLevel[] = ["none", "low", "medium", "high", "critical"];
 
 function clip(s: string, n: number): string {
   const t = (s ?? "").toString().replace(/\s+/g, " ").trim();
@@ -38,10 +35,10 @@ function badgeForAction(action: VerdictAction): string {
 }
 
 function pickPrimaryDetectFinding(e: EvidencePackageV0) {
-  const detect = (e.findings ?? []).filter((f: any) => f.kind === "detect");
+  const detect = (e.findings ?? []).filter(f => f.kind === "detect");
   if (!detect.length) return null;
 
-  detect.sort((a: any, b: any) => {
+  detect.sort((a, b) => {
     const ra = RISK_ORDER.indexOf(a.risk);
     const rb = RISK_ORDER.indexOf(b.risk);
     if (rb !== ra) return rb - ra;
@@ -58,8 +55,8 @@ function summarizeSources(e: EvidencePackageV0): string {
   // prompt always exists logically (user prompt)
   sources.add("user");
 
-  for (const ch of chunks as any[]) {
-    if (ch?.source) sources.add(String(ch.source));
+  for (const ch of chunks) {
+    if (ch.source) sources.add(String(ch.source));
   }
 
   return Array.from(sources).sort().join(", ");
@@ -69,13 +66,13 @@ function inputOneLiner(e: EvidencePackageV0, maxN: number): string {
   const prompt = e.rawDigest?.prompt?.preview ?? "";
   const chunks = e.normalized?.canonical?.promptChunksCanonical ?? [];
 
-  const retrieval = (chunks as any[])
+  const retrieval = chunks
     .map((ch, i) => ({ ...ch, i }))
     .filter(x => x.source === "retrieval");
 
   if (!retrieval.length) return `userPrompt="${clip(prompt, maxN)}"`;
 
-  const r0 = retrieval[0];
+  const r0 = retrieval[0]!;
   return `userPrompt="${clip(prompt, maxN)}" | retrieval#${r0.i}="${clip(r0.text ?? "", maxN)}"`;
 }
 
@@ -86,7 +83,7 @@ function obfuscationBadges(e: EvidencePackageV0): string {
     if (f.kind === "sanitize" && f.scanner === "unicode_sanitizer") tags.add("🧩 unicode");
     if (f.kind === "sanitize" && f.scanner === "hidden_ascii_tags") tags.add("🏷️ tags");
 
-    const mv = (f.evidence as any)?.matchedViews;
+    const mv = f.evidence?.["matchedViews"];
     if (Array.isArray(mv)) {
       if (mv.includes("revealed")) tags.add("👀 revealed");
       if (mv.includes("skeleton")) tags.add("🦴 skeleton");
@@ -100,23 +97,22 @@ function obfuscationBadges(e: EvidencePackageV0): string {
   return arr.length ? arr.join(" · ") : "none";
 }
 
-function whereOf(f: any): string {
-  if (!f?.target) return "N/A";
+function whereOf(f: Finding): string {
   if (f.target.field === "prompt") return `prompt@${f.target.view}`;
   return `chunk(${f.target.source ?? "unknown"}#${f.target.chunkIndex ?? -1})@${f.target.view}`;
 }
 
-function ruleLine(primary: any): string {
+function ruleLine(primary: Finding | null | undefined): string {
   if (!primary) return "N/A";
-  const ev: any = primary.evidence ?? {};
-  const ruleId = ev.ruleId ? `ruleId=${ev.ruleId}` : "ruleId=N/A";
-  const cat = ev.category ? `category=${ev.category}` : "category=N/A";
+  const ev = primary.evidence ?? {};
+  const ruleId = typeof ev["ruleId"] === "string" ? `ruleId=${ev["ruleId"]}` : "ruleId=N/A";
+  const cat = typeof ev["category"] === "string" ? `category=${ev["category"]}` : "category=N/A";
   return `${ruleId} | ${cat}`;
 }
 
-function matchedViewsLine(primary: any): string {
+function matchedViewsLine(primary: Finding | null | undefined): string {
   if (!primary) return "matchedViews=[]";
-  const mv = (primary.evidence as any)?.matchedViews;
+  const mv = primary.evidence?.["matchedViews"];
   if (!Array.isArray(mv)) return "matchedViews=[]";
   return `matchedViews=[${mv.join(", ")}]`;
 }
@@ -127,12 +123,14 @@ function topReason(e: EvidencePackageV0, maxN: number): string {
 }
 
 function detailsBlock(e: EvidencePackageV0, maxN: number): string {
-  const list = (e.findings ?? []).map((f: any) => {
-    const ev: any = f.evidence ?? {};
-    const mv = Array.isArray(ev.matchedViews) ? ` matchedViews=[${ev.matchedViews.join(", ")}]` : "";
-    const ruleId = ev.ruleId ? ` ruleId=${ev.ruleId}` : "";
-    const cat = ev.category ? ` category=${ev.category}` : "";
-    const snip = ev.snippet ? ` snippet="${clip(ev.snippet, maxN)}"` : "";
+  const list = (e.findings ?? []).map((f) => {
+    const ev = f.evidence ?? {};
+    const mvArr = ev["matchedViews"];
+    const mv = Array.isArray(mvArr) ? ` matchedViews=[${mvArr.join(", ")}]` : "";
+    const ruleId = typeof ev["ruleId"] === "string" ? ` ruleId=${ev["ruleId"]}` : "";
+    const cat = typeof ev["category"] === "string" ? ` category=${ev["category"]}` : "";
+    const snippet = ev["snippet"];
+    const snip = typeof snippet === "string" ? ` snippet="${clip(snippet, maxN)}"` : "";
     return `- ${f.kind}/${f.scanner} (${f.risk}, score=${f.score}) @ ${whereOf(f)} — ${f.summary}${ruleId}${cat}${mv}${snip}`;
   }).join("\n") || "- (none)";
 
@@ -160,7 +158,7 @@ export function renderEvidenceReportEN(e: EvidencePackageV0, opts: ReportOptions
 
   const action = e.decision.action as VerdictAction;
   const badge = badgeForAction(action);
-  const detectFindings = (e.findings ?? []).filter((f: any) => f.kind === "detect");
+  const detectFindings = (e.findings ?? []).filter(f => f.kind === "detect");
   const primary = pickPrimaryDetectFinding(e);
   const sources = summarizeSources(e);
   const indicators = obfuscationBadges(e);

@@ -36,3 +36,11 @@ export interface Finding {
   // Minimal structured evidence (avoid dumping full text here)
   evidence?: Record<string, unknown>;
 }
+
+// ── Shared constants & helpers ──────────────────────────────────────
+
+export const RISK_ORDER: readonly RiskLevel[] = ["none", "low", "medium", "high", "critical"];
+
+export function riskAtOrAbove(a: RiskLevel, b: RiskLevel): boolean {
+  return RISK_ORDER.indexOf(a) >= RISK_ORDER.indexOf(b);
+}

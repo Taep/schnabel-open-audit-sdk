@@ -1,12 +1,6 @@
 import type { PolicyDecision } from "./evaluate.js";
-import type { Finding, RiskLevel } from "../signals/types.js";
+import { type Finding, type RiskLevel, RISK_ORDER, riskAtOrAbove } from "../signals/types.js";
 import type { HistoryTurnV0 } from "../core/history_store.js";
-
-const RISK_ORDER: RiskLevel[] = ["none", "low", "medium", "high", "critical"];
-
-function riskAtOrAbove(a: RiskLevel, b: RiskLevel): boolean {
-  return RISK_ORDER.indexOf(a) >= RISK_ORDER.indexOf(b);
-}
 
 function cloneDecision(d: PolicyDecision): PolicyDecision {
   return {

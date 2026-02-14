@@ -1,4 +1,4 @@
-import type { Finding, RiskLevel } from "../signals/types.js";
+import { type Finding, type RiskLevel, RISK_ORDER, riskAtOrAbove } from "../signals/types.js";
 import type { InputSource, TextView } from "../normalizer/types.js";
 import { sha256Hex } from "../signals/util.js";
 
@@ -49,12 +49,6 @@ const DEFAULT_CFG: DumpPolicyConfig = {
   sampleSeed: "schnabel",
 };
 
-const RISK_ORDER: RiskLevel[] = ["none", "low", "medium", "high", "critical"];
-
-function riskAtOrAbove(a: RiskLevel, b: RiskLevel): boolean {
-  return RISK_ORDER.indexOf(a) >= RISK_ORDER.indexOf(b);
-}
-
 function maxFindingRisk(findings: Finding[]): RiskLevel {
   let max: RiskLevel = "none";
   for (const f of findings) {
@@ -67,7 +61,7 @@ function stableRand01(seed: string): number {
   // Use first 8 hex digits as a 32-bit integer
   const h = sha256Hex(seed).slice(0, 8);
   const n = parseInt(h, 16);
-  return n / 0xffffffff;
+  return n / 0x100000000;
 }
 
 /**
@@ -104,7 +98,7 @@ export function decideDumpPolicy(
   const viewSet = new Set<TextView>();
   for (const f of input.findings) {
     viewSet.add(f.target.view);
-    const mv = (f.evidence as any)?.matchedViews;
+    const mv = f.evidence?.["matchedViews"];
     if (Array.isArray(mv)) {
       for (const v of mv) viewSet.add(v);
     }

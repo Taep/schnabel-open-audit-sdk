@@ -5,6 +5,20 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.1] - 2026-02-14
+
+### Fixed
+
+- **Policy: `defaultConfidence("none")`** — Changed from 0.7 to 0.95. A clean input with no findings should yield high confidence, not lower than medium-risk inputs.
+- **Policy: scoreSum-based challenge** — When cumulative score sum triggers a challenge escalation, the decision now includes an explicit reason (`[POLICY] Cumulative score sum ... >= threshold`).
+- **Sampling: `stableRand01()` range** — Divisor corrected from `0xffffffff` to `0x100000000` so the output range is `[0, 1)` instead of `[0, 1]` (eliminates edge case where `rate=1.0` could still miss).
+
+### Changed
+
+- **`RISK_ORDER` and `riskAtOrAbove` centralized** — Moved to `signals/types.ts` as the single source of truth. Removed duplicate definitions from 6+ files. Both are now public exports available for custom scanner authors.
+- **`any` type cleanup (~25 spots)** — Replaced `any` with proper types across evidence, report, session, rulepack, and scanner modules. Uses `Record<string, unknown>` bracket-notation access, `catch (e: unknown)` with `instanceof Error`, and explicit `Finding` typing.
+- **`tsconfig.json`** — Added `"include": ["src"]` so `tsc --noEmit` no longer fails on test/example files outside `rootDir`.
+
 ## [1.0.0] - 2026-02-08
 
 ### Added
@@ -33,4 +47,5 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - README: architecture (L0–L5), full scanner list, Quickstart with minimal example and checkpoints, EvidenceOptions (preview/privacy), presets, red team, build.
 - LICENSE (ISC), CHANGELOG.
 
+[1.0.1]: https://github.com/schnabel-open-audit/schnabel-open-audit-sdk/releases/tag/v1.0.1
 [1.0.0]: https://github.com/schnabel-open-audit/schnabel-open-audit-sdk/releases/tag/v1.0.0
